@@ -21,11 +21,14 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 
 
 (async () => {
+// group: set up initial browser/tabs
   const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
   //open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc and get everything ready for puppeteer to start
   const initialTabForBrowser = (await browser.pages())[0];
   await initialTabForBrowser.goto(KrDashboardUrl);
+// end group: set up initial broswer/tabs
 
+// group: set timer to wait for login, then pop up "Start automated data entry? popup"
   // wait for a certain fixed amount of time for the person to get all logged into KR
   await initialTabForBrowser.waitForTimeout(18000)
   console.log('Waited eighteen seconds!');
@@ -42,6 +45,7 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
   const confirmedStartAutomation = await pageTab1.evaluate(_ => {
     return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
   });
+// end group: set timer to wait for login, then pop up "Start automated data entry? popup"
 
   // if the person clicks "ok" to start the automation - start filling things out with puppeteer
   if (confirmedStartAutomation) {
