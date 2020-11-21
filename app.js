@@ -51,9 +51,9 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
   if (confirmedStartAutomation) {
     //TODO: ADD SCREENSHOTS INTO BELOW FUNCTION
     // now do the automated changes to the proposals (later may want to use a json array or something external)
-    await doAutomatedDataEntryTasks(browser, PropDev1);
-    await doAutomatedDataEntryTasks(browser, PropDev2);
-    await doAutomatedDataEntryTasks(browser, PropDev3);
+    await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
+    await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
+    await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
   }
   // if the person clicks the cancel button - close the browser and do not start automation
   else {
@@ -64,10 +64,10 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 })();
 
 
-async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
+async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
 
   // use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
-  const pdDocChildFrame = await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
+  const pdDocChildFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
 
   //fist click on edit button on the bottom (only can cancel proposals when in edit mode, not view mode) - first make sure the button is present, then click it
@@ -116,8 +116,36 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
 
 
 
-
-
+/**
+ * Opens a proposal and determines the iframe that contains the actual kr document (proposal) that data entry needs to happen on.
+ *
+ * Because Kuali Research often has tons of nested iframes when the dashboard is
+ * turned on and because Puppeteer needs to be passed the exact iframe that
+ * contains the the proposal etc that we are trying to do data entry on
+ * and because for the old non-dashboard version there were no iframes, this
+ * helper function figured out the whether to pass back the main frame or the
+ * relevant child iframe that actually contains the KR document that has the
+ * form elements/boxes that contain the proposal, etc info
+ *
+ *
+ *
+ * @param {boolean}   krUsingNewDashboardWithIframes           Flag that indicates whether the KR dashboard is curently enabled
+ * @param {Object} browser     The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
+ * @param {string}   directLinkToProposal The URL of the KR record as would be generated from the link pop up at the top of KR proposal, award, etc records
+ *
+ * @return {Object} Returns the mainFrame or childFrame puppeteer object that points to the actual KR document which contains the form elements that will need to have the automated data entry done.
+ */
+async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal) {
+  if (krUsingNewDashboardWithIframes) {
+    return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
+  }
+  else {
+    // for KR with the dashboard turned of - open the proposal in the first browser tab and then return the parent frame
+    const pageTab1 = (await browser.pages())[0];
+    await pageTab1.goto(directLinkToProposal);
+    return pageTab1.mainFrame();
+  }
+}
 
 
 
