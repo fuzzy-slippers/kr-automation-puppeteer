@@ -24,31 +24,33 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 // group: set up initial browser/tabs
   const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
   //open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc and get everything ready for puppeteer to start
-  const initialTabForBrowser = (await browser.pages())[0];
-  await initialTabForBrowser.goto(KrDashboardUrl);
+  const pageTab1 = (await browser.pages())[0];
+  await pageTab1.goto(KrDashboardUrl);
 // end group: set up initial broswer/tabs
 
 // group: set timer to wait for login, then pop up "Start automated data entry? popup"
   // wait for a certain fixed amount of time for the person to get all logged into KR
-  await initialTabForBrowser.waitForTimeout(18000)
+  await pageTab1.waitForTimeout(18000)
   console.log('Waited eighteen seconds!');
   //once the person has had time to get logged in
 
 
-  //more reliable to use a second (blank) tab to pop up the alert to start the automation
-  const pageTab1 = await browser.newPage();
-  await pageTab1.goto(KrDashboardUrl);
+  //more reliable to use a second (blank) tab to pop up the alert to start the automation - that way the first tab can continue to load
+  const pageTab2 = await browser.newPage();
+  //await pageTab2.goto(KrDashboardUrl);
 
 
 
   // when times up pop up dialog to confirm ready to start the automated data entry - evaluate will run the function in the page context (the opened page)
-  const confirmedStartAutomation = await pageTab1.evaluate(_ => {
+  const confirmedStartAutomation = await pageTab2.evaluate(_ => {
     return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
   });
 // end group: set timer to wait for login, then pop up "Start automated data entry? popup"
 
   // if the person clicks "ok" to start the automation - start filling things out with puppeteer
   if (confirmedStartAutomation) {
+    //close the empty second tab just used to show the ok dialog box
+    pageTab2.close();
     //TODO: ADD SCREENSHOTS INTO BELOW FUNCTION
     // now do the automated changes to the proposals (later may want to use a json array or something external)
     await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
