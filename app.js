@@ -1,18 +1,18 @@
 const puppeteer = require('puppeteer');
 
 /*
-const KrDashboardUrl = `https://greendale-stg.kuali.co/res`;
-const PropDev1 = `https://usmd-sbx.kuali.co:/res/kc-common/development-proposals/200554`;
+const KrDashboardUrl = `https://greendale-sbx.kuali.co/res`;
+const PropDev1 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1177`;
 const PropDev2 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1187`;
 const PropDev3 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1186`;
 */
 
-/*
 
 
 
-*/
 
+
+const krUsingNewDashboardWithIframes = false;
 const KrDashboardUrl = `https://usmd-stg.kuali.co/res/`;
 const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201024`;
 const PropDev2 = `https://usmd-stg.kuali.co/res/kc-common/development-proposals/200836`;
@@ -97,15 +97,18 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
   await pdDocChildFrame.$eval('#u9v3fcv', el => el.click());
 
 
-  console.log(`about to click ok button on the "are you sure you want to cancel?" model popup`);
-  await pdDocChildFrame.waitForSelector('#u15k794s', { visible: true });
-  console.log(`trying eval click..`);
-  await pdDocChildFrame.$eval('#u15k794s', el => el.click());
+  // console.log(`about to click ok button on the "are you sure you want to cancel?" model popup`);
+  // await pdDocChildFrame.waitForSelector('#u15k794s', { visible: true });
+  // console.log(`trying eval click..`);
+  // await pdDocChildFrame.$eval('#u15k794s', el => el.click());
+
+/* not needed
   // console.log(`trying promise.all click()`);
   // await Promise.all([
   //   pdDocChildFrame.waitForNavigation(),
   //   pdDocChildFrame.click('#u15k794s'),
   // ]);
+*/
 
   console.log(`cancelled the proposal (${directLinkToProposal}) so returning true`);
   return true; // cancelled the proposal
@@ -115,6 +118,10 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
 
 
 
+
+
+
+//---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
 
 async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) {
   const browserTabs = [];
@@ -186,46 +193,3 @@ async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMa
     );
   }
 }
-
-
-
-/*
-
-async function recursiveFindInFrames(inputFrame, selector) {
-  const frames = inputFrame.childFrames();
-  const results = await Promise.all(
-    frames.map(async frame => {
-      const el = await frame.$(selector);
-      if (el) return el;
-      if (frame.childFrames().length > 0) {
-        return await recursiveFindInFrames(frame, selector);
-      }
-      return null;
-    })
-  );
-  return results.find(Boolean);
-}
-
-async function findInFrames(page, selector) {
-  const result = await recursiveFindInFrames(page.mainFrame(), selector);
-  if (!result) {
-    throw new Error(
-      `The selector \`${selector}\` could not be found in any child frames.`
-    );
-  }
-  return result;
-}
-
-
-
-
-
-function once(emitter, event) {
-  console.log(`emitter is: ${emitter}`);
-  console.log(`event is: ${event}`);
-  const frameUrl = emitter.url();
-  console.log('inside once() frameUrl: ' + frameUrl);
-  return new Promise(resolve => emitter.once(event, resolve));
-}
-
-*/
