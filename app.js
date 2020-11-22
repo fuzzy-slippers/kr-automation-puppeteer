@@ -21,31 +21,6 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 
 
 (async () => {
-// group: set up initial browser/tabs
-  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
-  //open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc and get everything ready for puppeteer to start
-  const pageTab1 = (await browser.pages())[0];
-  await pageTab1.goto(KrDashboardUrl);
-// end group: set up initial broswer/tabs
-
-// group: set timer to wait for login, then pop up "Start automated data entry? popup"
-  // wait for a certain fixed amount of time for the person to get all logged into KR
-  await pageTab1.waitForTimeout(18000)
-  console.log('INFO: Waited eighteen seconds!');
-  //once the person has had time to get logged in
-
-
-  //more reliable to use a second (blank) tab to pop up the alert to start the automation - that way the first tab can continue to load
-  const pageTab2 = await browser.newPage();
-  //await pageTab2.goto(KrDashboardUrl);
-
-
-
-  // when times up pop up dialog to confirm ready to start the automated data entry - evaluate will run the function in the page context (the opened page)
-  const confirmedStartAutomation = await pageTab2.evaluate(_ => {
-    return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
-  });
-// end group: set timer to wait for login, then pop up "Start automated data entry? popup"
 
   // if the person clicks "ok" to start the automation - start filling things out with puppeteer
   if (confirmedStartAutomation) {
@@ -57,14 +32,56 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
     await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
     await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
   }
-  // if the person clicks the cancel button - close the browser and do not start automation
-  else {
-    await browser.close();
-  }
+
 
 
 })();
 
+
+//open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc which will allow any automation to use
+    //once the person has had time to get logged in
+    //more reliable to use a second (blank) tab to pop up the alert to start the automation - that way the first tab can continue to load
+    // if the person clicks "ok" to start the automation - start filling things out with puppeteer
+  // wait for a certain fixed amount of time for the person to get all logged into KR
+  // after timer above finishes, pop up dialog to confirm ready to start the automated data entry - evaluate will run the function in the page context (the opened page)
+  // asssuming the person clicks "OK" to proceed with the automation, close the empty second browser tab and return back the browser object so it can be used for the KR automation steps
+  // if the person clicks the cancel button - close the browser and do not start automation
+
+  /**
+   * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
+   *
+   * This function does the initial steps to get a user logged in and ready to start
+   * the automated data entry. It follows the following steps:
+   * 1. launches a new chromium browser using puppeteer
+   * 2. loads the KR dashboard/home page in the initial tab
+   * 3. given that the user will be presented with the SSO login which takes time, uses a timer to wait 10s of seconds until all the login MFA steps have been completed
+   * 4. when the timer is up, pops up a new blank (second) tab with a js dialog box asking the user if they want to start the automation (OK/Cancel)
+   * 5. if the user clicks ok, it closes the blank second tab, returning the browser object
+   *    but if the user clicks cancel it closes the chromium browser and throws an error saying the person clicked cancel
+   * @param {string}   KrDashboardUrl           The URL of the KR home page, used to trigger the approriate SSO login prompts
+   * @param {number}   [howLongToWaitForSSOLogin=18000] The amount of time in milliseconds to wait for the user to get logged into KR with the SSO screens before popping up the question of whether they are ready to start the automations
+   *
+   * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
+   */
+async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
+  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
+  const pageTab1 = (await browser.pages())[0];
+  await pageTab1.goto(KrDashboardUrl);
+  await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
+  console.log(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
+  const pageTab2 = await browser.newPage();
+  const userConfirmedStartAutomation = await pageTab2.evaluate(_ => {
+    return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
+  });
+  if (userConfirmedStartAutomation) {
+    pageTab2.close();
+    return browser;
+  }
+  else {
+    await browser.close();
+    throw new Error(`The user clicked the cancel button when asked if they wanted to start the automation - shutting down the program with error return code`);
+  }
+}
 
 async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
 
