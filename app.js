@@ -31,7 +31,7 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 // group: set timer to wait for login, then pop up "Start automated data entry? popup"
   // wait for a certain fixed amount of time for the person to get all logged into KR
   await initialTabForBrowser.waitForTimeout(18000)
-  console.log('Waited eighteen seconds!');
+  console.log('INFO: Waited eighteen seconds!');
   //once the person has had time to get logged in
 
 
@@ -71,19 +71,19 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
 
 
   //fist click on edit button on the bottom (only can cancel proposals when in edit mode, not view mode) - first make sure the button is present, then click it
-  console.log(`about to click on edit button`);
+  console.log(`INFO: about to click on edit button`);
   await pdDocChildFrame.waitForSelector('#u15ecnpy');
   let element = await pdDocChildFrame.$('#u15ecnpy');
-  console.log(`element for edit button: ${element}`);
+  console.log(`INFO: element for edit button: ${element}`);
   let value = await pdDocChildFrame.evaluate(el => el.textContent, element)
-  console.log(`value for edit button: ${value}`);
+  console.log(`INFO: value for edit button: ${value}`);
   await Promise.all([
     pdDocChildFrame.waitForNavigation(),
     pdDocChildFrame.click('#u15ecnpy'),
   ]);
 
   //next click on Summary/Submit menu option on left side of iframe
-  console.log(`about to click on summary/submit`);
+  console.log(`INFO: about to click on summary/submit`);
   await pdDocChildFrame.waitForSelector('#u79genf');
   await Promise.all([
     pdDocChildFrame.waitForNavigation(),
@@ -92,7 +92,7 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
 
 
   //next click the cancel button at the bottom of the iframe - because it pops up modal window, found that I needed to use the $eval format below instead of just a regular .click() for some reason
-  console.log(`about to click cancel button (using $eval)`);
+  console.log(`INFO: about to click cancel button (using $eval)`);
   await pdDocChildFrame.waitForSelector('#u9v3fcv', { visible: true });
   await pdDocChildFrame.$eval('#u9v3fcv', el => el.click());
 
@@ -110,7 +110,7 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal) {
   // ]);
 */
 
-  console.log(`cancelled the proposal (${directLinkToProposal}) so returning true`);
+  console.log(`Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
 
