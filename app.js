@@ -75,10 +75,10 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingN
   //fist click on edit button on the bottom (only can cancel proposals when in edit mode, not view mode) - first make sure the button is present, then click it
   console.log(`INFO: about to click on edit button`);
   await pdDocChildFrame.waitForSelector('#u15ecnpy');
-  let element = await pdDocChildFrame.$('#u15ecnpy');
-  console.log(`INFO: element for edit button: ${element}`);
-  let value = await pdDocChildFrame.evaluate(el => el.textContent, element)
-  console.log(`INFO: value for edit button: ${value}`);
+  //let element = await pdDocChildFrame.$('#u15ecnpy');
+  //console.log(`INFO: element for edit button: ${element}`);
+  //let value = await pdDocChildFrame.evaluate(el => el.textContent, element)
+  //console.log(`INFO: value for edit button: ${value}`);
   await Promise.all([
     pdDocChildFrame.waitForNavigation(),
     pdDocChildFrame.click('#u15ecnpy'),
@@ -112,7 +112,7 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingN
   // ]);
 */
 
-  console.log(`Finished cancelling Proposal: (${directLinkToProposal})`);
+  console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
 
