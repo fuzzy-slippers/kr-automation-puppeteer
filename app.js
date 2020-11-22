@@ -13,6 +13,7 @@ const PropDev3 = `https://greendale-sbx.kuali.co:/res/kc-common/development-prop
 
 
 const krUsingNewDashboardWithIframes = false;
+const howLongToWaitForSSOLogin = 18000;
 const KrDashboardUrl = `https://usmd-stg.kuali.co/res/`;
 const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201024`;
 const PropDev2 = `https://usmd-stg.kuali.co/res/kc-common/development-proposals/200836`;
@@ -22,30 +23,14 @@ const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals
 
 (async () => {
 
-  // if the person clicks "ok" to start the automation - start filling things out with puppeteer
-  if (confirmedStartAutomation) {
-    //close the empty second tab just used to show the ok dialog box
-    pageTab2.close();
-    //TODO: ADD SCREENSHOTS INTO BELOW FUNCTION
-    // now do the automated changes to the proposals (later may want to use a json array or something external)
-    await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
-    await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
-    await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
-  }
+  const browser = await launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin);
 
-
+  await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
+  await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
+  await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
 
 })();
 
-
-//open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc which will allow any automation to use
-    //once the person has had time to get logged in
-    //more reliable to use a second (blank) tab to pop up the alert to start the automation - that way the first tab can continue to load
-    // if the person clicks "ok" to start the automation - start filling things out with puppeteer
-  // wait for a certain fixed amount of time for the person to get all logged into KR
-  // after timer above finishes, pop up dialog to confirm ready to start the automated data entry - evaluate will run the function in the page context (the opened page)
-  // asssuming the person clicks "OK" to proceed with the automation, close the empty second browser tab and return back the browser object so it can be used for the KR automation steps
-  // if the person clicks the cancel button - close the browser and do not start automation
 
   /**
    * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
