@@ -73,18 +73,8 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingN
   // use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
   const pdDocChildFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
+  await clickPropDevEditButton(pdDocChildFrame);
 
-  //fist click on edit button on the bottom (only can cancel proposals when in edit mode, not view mode) - first make sure the button is present, then click it
-  console.log(`INFO: about to click on edit button`);
-  await pdDocChildFrame.waitForSelector('#u15ecnpy');
-  //let element = await pdDocChildFrame.$('#u15ecnpy');
-  //console.log(`INFO: element for edit button: ${element}`);
-  //let value = await pdDocChildFrame.evaluate(el => el.textContent, element)
-  //console.log(`INFO: value for edit button: ${value}`);
-  await Promise.all([
-    pdDocChildFrame.waitForNavigation(),
-    pdDocChildFrame.click('#u15ecnpy'),
-  ]);
 
   //next click on Summary/Submit menu option on left side of iframe
   console.log(`INFO: about to click on summary/submit`);
@@ -151,7 +141,23 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
   }
 }
 
-
+/**
+ * Clicks on the Edit button at the bottom of the Prop Dev Details tab after making sure the edit button has loaded
+ *
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevEditButton(propDevPageIframe) {
+  console.log(`INFO: about to click on edit button`);
+  await propDevPageIframe.waitForSelector('#u15ecnpy');
+  //let element = await propDevPageIframe.$('#u15ecnpy');
+  //console.log(`INFO: element for edit button: ${element}`);
+  //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
+  //console.log(`INFO: value for edit button: ${value}`);
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.click('#u15ecnpy'),
+  ]);
+}
 
 //---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
 
