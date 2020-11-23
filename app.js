@@ -15,7 +15,7 @@ const PropDev3 = `https://greendale-sbx.kuali.co:/res/kc-common/development-prop
 const krUsingNewDashboardWithIframes = false;
 const howLongToWaitForSSOLogin = 18000;
 const KrDashboardUrl = `https://usmd-stg.kuali.co/res/`;
-const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201024`;
+const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/34927`;
 const PropDev2 = `https://usmd-stg.kuali.co/res/kc-common/development-proposals/200836`;
 const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201020`;
 
@@ -69,30 +69,13 @@ async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWai
 }
 
 async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
-
-  // use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
+  // (old comment only applicable for when KR dashboard turned on) - use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
   const pdDocChildFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
   await clickPropDevEditButton(pdDocChildFrame);
   await clickPropDevMenuSummarySubmit(pdDocChildFrame);
   await clickPropDevCancelProposalButton(pdDocChildFrame);
-
-
-
-
-
-  // console.log(`about to click ok button on the "are you sure you want to cancel?" model popup`);
-  // await pdDocChildFrame.waitForSelector('#u15k794s', { visible: true });
-  // console.log(`trying eval click..`);
-  // await pdDocChildFrame.$eval('#u15k794s', el => el.click());
-
-/* not needed
-  // console.log(`trying promise.all click()`);
-  // await Promise.all([
-  //   pdDocChildFrame.waitForNavigation(),
-  //   pdDocChildFrame.click('#u15k794s'),
-  // ]);
-*/
+  await clickPropDevOkCancelButtonOnPopup(pdDocChildFrame);
 
   console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
@@ -175,6 +158,21 @@ async function clickPropDevCancelProposalButton(propDevPageIframe) {
   console.log(`INFO: about to click Cancel Proposal button at bottom of Summary/Submit tab (using $eval)`);
   await propDevPageIframe.waitForSelector('#u9v3fcv', { visible: true });
   await propDevPageIframe.$eval('#u9v3fcv', el => el.click());
+}
+
+/**
+ * Clicks on the Ok button inside the "are you sure you want to cancel?" model that is popped up in KR when you click the Cancel Proposal on the PD Summary/Submit tab
+ * 
+ * Using the $eval seemed to work consistently for this to do the clicking (there might be some considerations given its inside a bootstrap model window) - also found that I needed to use the promise.all around it with a waitForNavigation() call or else when it tried to open the next proposal (next run of the doAutomatedDataEntryTasks function) it was showing a connection error navigating to the next proposal and it appears to be that it wasn't waiting until the page loaded after clicking the button, even though this one proposal would cancel
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
+  console.log(`INFO: about to click ok button on the "are you sure you want to cancel?" model popup (using $eval)`);
+  await propDevPageIframe.waitForSelector('#u15k794s', { visible: true });
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.$eval('#u15k794s', el => el.click()),
+  ]);    
 }
 
 //---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
