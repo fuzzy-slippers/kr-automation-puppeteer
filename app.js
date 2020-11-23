@@ -74,15 +74,9 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingN
   const pdDocChildFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
   await clickPropDevEditButton(pdDocChildFrame);
+  await clickPropDevMenuSummarySubmit(pdDocChildFrame);
 
 
-  //next click on Summary/Submit menu option on left side of iframe
-  console.log(`INFO: about to click on summary/submit`);
-  await pdDocChildFrame.waitForSelector('#u79genf');
-  await Promise.all([
-    pdDocChildFrame.waitForNavigation(),
-    pdDocChildFrame.click('#u79genf'),
-  ]);
 
 
   //next click the cancel button at the bottom of the iframe - because it pops up modal window, found that I needed to use the $eval format below instead of just a regular .click() for some reason
@@ -134,7 +128,7 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
     return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
   }
   else {
-    // for KR with the dashboard turned of - open the proposal in the first browser tab and then return the parent frame
+    // for KR with the dashboard turned off - open the proposal in the first browser tab and then return the parent frame
     const pageTab1 = (await browser.pages())[0];
     await pageTab1.goto(directLinkToProposal);
     return pageTab1.mainFrame();
@@ -147,8 +141,9 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
 async function clickPropDevEditButton(propDevPageIframe) {
-  console.log(`INFO: about to click on edit button`);
+  console.log(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
   await propDevPageIframe.waitForSelector('#u15ecnpy');
+  console.log(`INFO: selector #u15ecnpy appears to be loaded`);
   //let element = await propDevPageIframe.$('#u15ecnpy');
   //console.log(`INFO: element for edit button: ${element}`);
   //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
@@ -156,6 +151,20 @@ async function clickPropDevEditButton(propDevPageIframe) {
   await Promise.all([
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.click('#u15ecnpy'),
+  ]);
+}
+
+/**
+ * Clicks on the Proposal Development "Summary/Submit" menu option on the righthand menu, after making sure the css for that menu option has loaded
+ *
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevMenuSummarySubmit(propDevPageIframe) {
+  console.log(`INFO: about to click on summary/submit`);
+  await propDevPageIframe.waitForSelector('#u79genf');
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.click('#u79genf'),
   ]);
 }
 
