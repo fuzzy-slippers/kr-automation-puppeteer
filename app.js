@@ -75,14 +75,10 @@ async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingN
 
   await clickPropDevEditButton(pdDocChildFrame);
   await clickPropDevMenuSummarySubmit(pdDocChildFrame);
+  await clickPropDevCancelProposalButton(pdDocChildFrame);
 
 
 
-
-  //next click the cancel button at the bottom of the iframe - because it pops up modal window, found that I needed to use the $eval format below instead of just a regular .click() for some reason
-  console.log(`INFO: about to click cancel button (using $eval)`);
-  await pdDocChildFrame.waitForSelector('#u9v3fcv', { visible: true });
-  await pdDocChildFrame.$eval('#u9v3fcv', el => el.click());
 
 
   // console.log(`about to click ok button on the "are you sure you want to cancel?" model popup`);
@@ -166,6 +162,19 @@ async function clickPropDevMenuSummarySubmit(propDevPageIframe) {
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.click('#u79genf'),
   ]);
+}
+
+/**
+ * Clicks the "Cancel Proposal" button at the bottom of the KR PD Summary/Submit tab after confirming the selector is loaded/present
+ *
+ * In the process of trying to get the click for this working, seemingly because it pops up modal window, found that I needed to use the $eval formatinstead of just a regular .click() for some reason
+ * 
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevCancelProposalButton(propDevPageIframe) {
+  console.log(`INFO: about to click Cancel Proposal button at bottom of Summary/Submit tab (using $eval)`);
+  await propDevPageIframe.waitForSelector('#u9v3fcv', { visible: true });
+  await propDevPageIframe.$eval('#u9v3fcv', el => el.click());
 }
 
 //---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
