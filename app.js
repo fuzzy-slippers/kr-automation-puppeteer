@@ -13,106 +13,71 @@ const PropDev3 = `https://greendale-sbx.kuali.co:/res/kc-common/development-prop
 
 
 const krUsingNewDashboardWithIframes = false;
+const howLongToWaitForSSOLogin = 18000;
 const KrDashboardUrl = `https://usmd-stg.kuali.co/res/`;
-const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201024`;
+const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/34927`;
 const PropDev2 = `https://usmd-stg.kuali.co/res/kc-common/development-proposals/200836`;
 const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201020`;
 
 
 
 (async () => {
-// group: set up initial browser/tabs
-  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
-  //open kr to main page/dashboard which will prompt to get logged into KR, including UMD SSO, etc and get everything ready for puppeteer to start
-  const pageTab1 = (await browser.pages())[0];
-  await pageTab1.goto(KrDashboardUrl);
-// end group: set up initial broswer/tabs
 
-// group: set timer to wait for login, then pop up "Start automated data entry? popup"
-  // wait for a certain fixed amount of time for the person to get all logged into KR
-  await pageTab1.waitForTimeout(18000)
-  console.log('Waited eighteen seconds!');
-  //once the person has had time to get logged in
+  const browser = await launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin);
 
-
-  //more reliable to use a second (blank) tab to pop up the alert to start the automation - that way the first tab can continue to load
-  const pageTab2 = await browser.newPage();
-  //await pageTab2.goto(KrDashboardUrl);
-
-
-
-  // when times up pop up dialog to confirm ready to start the automated data entry - evaluate will run the function in the page context (the opened page)
-  const confirmedStartAutomation = await pageTab2.evaluate(_ => {
-    return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
-  });
-// end group: set timer to wait for login, then pop up "Start automated data entry? popup"
-
-  // if the person clicks "ok" to start the automation - start filling things out with puppeteer
-  if (confirmedStartAutomation) {
-    //close the empty second tab just used to show the ok dialog box
-    pageTab2.close();
-    //TODO: ADD SCREENSHOTS INTO BELOW FUNCTION
-    // now do the automated changes to the proposals (later may want to use a json array or something external)
-    await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
-    await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
-    await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
-  }
-  // if the person clicks the cancel button - close the browser and do not start automation
-  else {
-    await browser.close();
-  }
-
+  await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
+  await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
+  await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
 
 })();
 
 
-async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
+  /**
+   * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
+   *
+   * This function does the initial steps to get a user logged in and ready to start
+   * the automated data entry. It follows the following steps:
+   * 1. launches a new chromium browser using puppeteer
+   * 2. loads the KR dashboard/home page in the initial tab
+   * 3. given that the user will be presented with the SSO login which takes time, uses a timer to wait 10s of seconds until all the login MFA steps have been completed
+   * 4. when the timer is up, pops up a new blank (second) tab with a js dialog box asking the user if they want to start the automation (OK/Cancel)
+   * 5. if the user clicks ok, it closes the blank second tab, returning the browser object
+   *    but if the user clicks cancel it closes the chromium browser and throws an error saying the person clicked cancel
+   * @param {string}   KrDashboardUrl           The URL of the KR home page, used to trigger the approriate SSO login prompts
+   * @param {number}   [howLongToWaitForSSOLogin=18000] The amount of time in milliseconds to wait for the user to get logged into KR with the SSO screens before popping up the question of whether they are ready to start the automations
+   *
+   * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
+   */
+async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
+  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
+  const pageTab1 = (await browser.pages())[0];
+  await pageTab1.goto(KrDashboardUrl);
+  await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
+  console.log(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
+  const pageTab2 = await browser.newPage();
+  const userConfirmedStartAutomation = await pageTab2.evaluate(_ => {
+    return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
+  });
+  if (userConfirmedStartAutomation) {
+    pageTab2.close();
+    return browser;
+  }
+  else {
+    await browser.close();
+    throw new Error(`The user clicked the cancel button when asked if they wanted to start the automation - shutting down the program with error return code`);
+  }
+}
 
-  // use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
+async function doAutomatedDataEntryTasks(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
+  // (old comment only applicable for when KR dashboard turned on) - use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
   const pdDocChildFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
+  await clickPropDevEditButton(pdDocChildFrame);
+  await clickPropDevMenuSummarySubmit(pdDocChildFrame);
+  await clickPropDevCancelProposalButton(pdDocChildFrame);
+  await clickPropDevOkCancelButtonOnPopup(pdDocChildFrame);
 
-  //fist click on edit button on the bottom (only can cancel proposals when in edit mode, not view mode) - first make sure the button is present, then click it
-  console.log(`about to click on edit button`);
-  await pdDocChildFrame.waitForSelector('#u15ecnpy');
-  let element = await pdDocChildFrame.$('#u15ecnpy');
-  console.log(`element for edit button: ${element}`);
-  let value = await pdDocChildFrame.evaluate(el => el.textContent, element)
-  console.log(`value for edit button: ${value}`);
-  await Promise.all([
-    pdDocChildFrame.waitForNavigation(),
-    pdDocChildFrame.click('#u15ecnpy'),
-  ]);
-
-  //next click on Summary/Submit menu option on left side of iframe
-  console.log(`about to click on summary/submit`);
-  await pdDocChildFrame.waitForSelector('#u79genf');
-  await Promise.all([
-    pdDocChildFrame.waitForNavigation(),
-    pdDocChildFrame.click('#u79genf'),
-  ]);
-
-
-  //next click the cancel button at the bottom of the iframe - because it pops up modal window, found that I needed to use the $eval format below instead of just a regular .click() for some reason
-  console.log(`about to click cancel button (using $eval)`);
-  await pdDocChildFrame.waitForSelector('#u9v3fcv', { visible: true });
-  await pdDocChildFrame.$eval('#u9v3fcv', el => el.click());
-
-
-  // console.log(`about to click ok button on the "are you sure you want to cancel?" model popup`);
-  // await pdDocChildFrame.waitForSelector('#u15k794s', { visible: true });
-  // console.log(`trying eval click..`);
-  // await pdDocChildFrame.$eval('#u15k794s', el => el.click());
-
-/* not needed
-  // console.log(`trying promise.all click()`);
-  // await Promise.all([
-  //   pdDocChildFrame.waitForNavigation(),
-  //   pdDocChildFrame.click('#u15k794s'),
-  // ]);
-*/
-
-  console.log(`cancelled the proposal (${directLinkToProposal}) so returning true`);
+  console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
 
@@ -142,14 +107,73 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
     return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
   }
   else {
-    // for KR with the dashboard turned of - open the proposal in the first browser tab and then return the parent frame
+    // for KR with the dashboard turned off - open the proposal in the first browser tab and then return the parent frame
     const pageTab1 = (await browser.pages())[0];
     await pageTab1.goto(directLinkToProposal);
     return pageTab1.mainFrame();
   }
 }
 
+/**
+ * Clicks on the Edit button at the bottom of the Prop Dev Details tab after making sure the edit button has loaded
+ *
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevEditButton(propDevPageIframe) {
+  console.log(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
+  await propDevPageIframe.waitForSelector('#u15ecnpy');
+  console.log(`INFO: selector #u15ecnpy appears to be loaded`);
+  //let element = await propDevPageIframe.$('#u15ecnpy');
+  //console.log(`INFO: element for edit button: ${element}`);
+  //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
+  //console.log(`INFO: value for edit button: ${value}`);
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.click('#u15ecnpy'),
+  ]);
+}
 
+/**
+ * Clicks on the Proposal Development "Summary/Submit" menu option on the righthand menu, after making sure the css for that menu option has loaded
+ *
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevMenuSummarySubmit(propDevPageIframe) {
+  console.log(`INFO: about to click on summary/submit`);
+  await propDevPageIframe.waitForSelector('#u79genf');
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.click('#u79genf'),
+  ]);
+}
+
+/**
+ * Clicks the "Cancel Proposal" button at the bottom of the KR PD Summary/Submit tab after confirming the selector is loaded/present
+ *
+ * In the process of trying to get the click for this working, seemingly because it pops up modal window, found that I needed to use the $eval formatinstead of just a regular .click() for some reason
+ * 
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevCancelProposalButton(propDevPageIframe) {
+  console.log(`INFO: about to click Cancel Proposal button at bottom of Summary/Submit tab (using $eval)`);
+  await propDevPageIframe.waitForSelector('#u9v3fcv', { visible: true });
+  await propDevPageIframe.$eval('#u9v3fcv', el => el.click());
+}
+
+/**
+ * Clicks on the Ok button inside the "are you sure you want to cancel?" model that is popped up in KR when you click the Cancel Proposal on the PD Summary/Submit tab
+ * 
+ * Using the $eval seemed to work consistently for this to do the clicking (there might be some considerations given its inside a bootstrap model window) - also found that I needed to use the promise.all around it with a waitForNavigation() call or else when it tried to open the next proposal (next run of the doAutomatedDataEntryTasks function) it was showing a connection error navigating to the next proposal and it appears to be that it wasn't waiting until the page loaded after clicking the button, even though this one proposal would cancel
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
+  console.log(`INFO: about to click ok button on the "are you sure you want to cancel?" model popup (using $eval)`);
+  await propDevPageIframe.waitForSelector('#u15k794s', { visible: true });
+  await Promise.all([
+    propDevPageIframe.waitForNavigation(),
+    propDevPageIframe.$eval('#u15k794s', el => el.click()),
+  ]);    
+}
 
 //---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
 
