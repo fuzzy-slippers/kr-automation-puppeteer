@@ -1,3 +1,6 @@
+# Local Configs excluded - only check in the sample configs in the sampleConfigFiles folder
+umdSpecificConfigFiles
+
 # Logs
 logs
 *.log
