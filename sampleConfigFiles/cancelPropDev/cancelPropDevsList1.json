@@ -1,4 +1,5 @@
 {
+    "automationTask": "cancelPropDevProposals",    
     "isKrUsingNewDashboardWithIframes": true,
     "howLongToWaitForSSOLogin": 18000,    
     "urlToTriggerSSOLogin": "https://greendale-sbx.kuali.co/res",

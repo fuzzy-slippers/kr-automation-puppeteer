@@ -45,7 +45,10 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    */
   function confirmJsonConfigFileContainsAllNeededElements(argv) {
     console.info(`INFO:argv parsed from the JSON is: ${JSON.stringify(argv)}`);
-    if (!argv.urlToTriggerSSOLogin) {
+    if (!argv.automationTask) {
+      console.error(`ERROR:The config JSON file passed in must have a automationTask string that indicates the type of automation for the program to do - this allows the same program to do a list of different automations (cancel proposals, change award statuses, etc)`);
+    }    
+    else if (!argv.urlToTriggerSSOLogin) {
       console.error(`ERROR:The config JSON file passed in must have a urlToTriggerSSOLogin string listing the URL to open to force you to log in via SSO so the rest of the pages opened do not require login`);
     }
     else if (!argv.howLongToWaitForSSOLogin) {
