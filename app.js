@@ -19,6 +19,30 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
   if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
     const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
 
+    switch (argv.automationTask) {
+      case `cancelPropDevProposals`:
+        ////////////////////console.log(2);
+        break;
+      default:
+        throw new Error(`the json config must specify a automationTask as one of the fields so the program knows which automation to perform`);
+    }
+  }
+  else {
+    throw new Error(`Exiting the program as the JSON config file (required to be passed in) is missing needed fields to run the program`);
+  }
+})();
+
+  /**
+   * Automate the cancelling of a list of KR prop dev proposals. 
+   * 
+   * description...
+   * @param {Object} browser     The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
+   * @param {string}   leftPortionOfKRDirectLinkToModule The left portion of the direct link to a KR prop dev proposal, minus the proposal number portion, as would be generated from the link pop up at the top of KR prop dev module screen
+   * @param {number}   [howLongToWaitForSSOLogin=18000] The amount of time in milliseconds to wait for the user to get logged into KR with the SSO screens before popping up the question of whether they are ready to start the automations
+ * @param {boolean}   krUsingNewDashboardWithIframes           Flag that indicates whether the KR dashboard is curently enabled
+   * 
+   */
+  function doAutomationCancelPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes){
     const PropDev1 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[0];
     const PropDev2 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[1];
     const PropDev3 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[2];
@@ -27,12 +51,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     await doAutomatedDataEntryTasks(browser, PropDev1, argv.isKrUsingNewDashboardWithIframes);
     await doAutomatedDataEntryTasks(browser, PropDev2, argv.isKrUsingNewDashboardWithIframes);
     await doAutomatedDataEntryTasks(browser, PropDev3, argv.isKrUsingNewDashboardWithIframes);
-  }
-  else {
-    throw new Error(`Exiting the program as the JSON config file (required to be passed in) is missing needed fields to run the program`);
-  }
-})();
-
+}
   /**
    * Make sure that the JSON file passed in on the command line using yargs has all the needed elements
    *
