@@ -1,7 +1,7 @@
 {
   "name": "automation",
   "version": "1.0.0",
-  "description": "testing for now",
+  "description": "utility for automating repeditive KR data entry",
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "-": "0.0.1",
-    "puppeteer": "^5.5.0"
+    "puppeteer": "^5.5.0",
+    "yargs": "^16.1.1"
   }
 }

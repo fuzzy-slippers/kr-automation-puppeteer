@@ -1,36 +1,69 @@
+#!/usr/bin/env node
 const puppeteer = require('puppeteer');
-
-/*
-const KrDashboardUrl = `https://greendale-sbx.kuali.co/res`;
-const PropDev1 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1177`;
-const PropDev2 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1187`;
-const PropDev3 = `https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/1186`;
-*/
-
-
-
-
-
-
-const krUsingNewDashboardWithIframes = false;
-const howLongToWaitForSSOLogin = 18000;
-const KrDashboardUrl = `https://usmd-stg.kuali.co/res/`;
-const PropDev1 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/34927`;
-const PropDev2 = `https://usmd-stg.kuali.co/res/kc-common/development-proposals/200836`;
-const PropDev3 = `https://usmd-stg.kuali.co:/res/kc-common/development-proposals/201020`;
-
+const fs = require('fs');
+// using yargs to handle command line options and auto-generate help menu of the options
+// specifically specifying a JSON file indicating what we are trying automated and the KR records to update
+const argv = require('yargs/yargs')(process.argv.slice(2))
+  .config(`jsonconfigfile`, function (configPath) {
+    return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+  })
+  .option(`jsonconfigfile`, {
+    alias: `j`,
+    describe: `path to a json config file containing: root KR URL, array of proposals, etc `
+  })
+  .demandOption([`jsonconfigfile`], `Please include the path via jsonconfigfile= to a json file containing the records in KR to open NOTE: npm run start not working with the args, use node <appname.js> instead`)
+  .argv;
 
 
 (async () => {
+  if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
+    const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
 
-  const browser = await launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin);
+    const PropDev1 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[0];
+    const PropDev2 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[1];
+    const PropDev3 = argv.leftPortionOfKRDirectLinkToModule + argv.recordNumsToUpdateInKRArr[2];
 
-  await doAutomatedDataEntryTasks(browser, PropDev1, krUsingNewDashboardWithIframes);
-  await doAutomatedDataEntryTasks(browser, PropDev2, krUsingNewDashboardWithIframes);
-  await doAutomatedDataEntryTasks(browser, PropDev3, krUsingNewDashboardWithIframes);
 
+    await doAutomatedDataEntryTasks(browser, PropDev1, argv.isKrUsingNewDashboardWithIframes);
+    await doAutomatedDataEntryTasks(browser, PropDev2, argv.isKrUsingNewDashboardWithIframes);
+    await doAutomatedDataEntryTasks(browser, PropDev3, argv.isKrUsingNewDashboardWithIframes);
+  }
+  else {
+    throw new Error(`Exiting the program as the JSON config file (required to be passed in) is missing needed fields to run the program`);
+  }
 })();
 
+  /**
+   * Make sure that the JSON file passed in on the command line using yargs has all the needed elements
+   *
+   * We want to make sure the JSON file contains elements for what to automate, which KR instance to use (SBX/STG, greendale-sbx) , etc and which records in KR to update
+   * if all the various top level parts of the json config file are detected, return true to indicate all seemed to be ok with the json config file
+   * if any of the listed top level fields are missing, output the portions missing in the json config file with a message to standard error
+   * @param {Object}   argv   The argv object passed through the yargs node library that parses a json config file
+   *
+   * @return {Boolean} if the passed in JSON config file is missing any of the fields needed return false
+   */
+  function confirmJsonConfigFileContainsAllNeededElements(argv) {
+    console.info(`INFO:argv parsed from the JSON is: ${JSON.stringify(argv)}`);
+    if (!argv.urlToTriggerSSOLogin) {
+      console.error(`ERROR:The config JSON file passed in must have a urlToTriggerSSOLogin string listing the URL to open to force you to log in via SSO so the rest of the pages opened do not require login`);
+    }
+    else if (!argv.howLongToWaitForSSOLogin) {
+      console.error(`ERROR:The config JSON file passed in must have a howLongToWaitForSSOLogin numeric value present which is the number of milliseconds to wait to get all logged in via SSO/MFA before attempting to start the automation - for example 18000 which is 18 seconds`);
+    }  
+    else if (!argv.hasOwnProperty(`isKrUsingNewDashboardWithIframes`)) {
+      console.error(`ERROR:The config JSON file passed in must have a isKrUsingNewDashboardWithIframes true/false value to indicate if the new KR dashboard is enabled - the automation handles iframes differently with and without the dashboard on`);
+    }
+    else if (!argv.leftPortionOfKRDirectLinkToModule) {
+      console.error(`ERROR:The config JSON file passed in must have a leftPortionOfKRDirectLinkToModule string listing the left portion of the direct link to the KR record, for example https://usmd-stg.kuali.co:/res/kc-common/development-proposals/ minus the prop dev number if currently doing automation on KR Prod Dev records`);
+    }
+    else if (!argv.recordNumsToUpdateInKRArr || !argv.recordNumsToUpdateInKRArr[0]) {
+      console.error(`ERROR:The config JSON file passed in must have a recordNumsToUpdateInKRArr array with at least one element, listing the record numbers (PD numbers, etc) that go at the end of the direct link in KR to identify a particular record to load - these are the way to specify which records to do automated data entry against`);
+    }  
+    else {
+      return true;
+    }
+  }
 
   /**
    * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
@@ -53,7 +86,7 @@ async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWai
   const pageTab1 = (await browser.pages())[0];
   await pageTab1.goto(KrDashboardUrl);
   await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
-  console.log(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
+  console.info(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
   const pageTab2 = await browser.newPage();
   const userConfirmedStartAutomation = await pageTab2.evaluate(_ => {
     return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
@@ -120,13 +153,13 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
 async function clickPropDevEditButton(propDevPageIframe) {
-  console.log(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
+  console.info(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
   await propDevPageIframe.waitForSelector('#u15ecnpy');
-  console.log(`INFO: selector #u15ecnpy appears to be loaded`);
+  console.info(`INFO: selector #u15ecnpy appears to be loaded`);
   //let element = await propDevPageIframe.$('#u15ecnpy');
-  //console.log(`INFO: element for edit button: ${element}`);
+  //console.info(`INFO: element for edit button: ${element}`);
   //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
-  //console.log(`INFO: value for edit button: ${value}`);
+  //console.info(`INFO: value for edit button: ${value}`);
   await Promise.all([
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.click('#u15ecnpy'),
@@ -155,7 +188,7 @@ async function clickPropDevMenuSummarySubmit(propDevPageIframe) {
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
 async function clickPropDevCancelProposalButton(propDevPageIframe) {
-  console.log(`INFO: about to click Cancel Proposal button at bottom of Summary/Submit tab (using $eval)`);
+  console.info(`INFO: about to click Cancel Proposal button at bottom of Summary/Submit tab (using $eval)`);
   await propDevPageIframe.waitForSelector('#u9v3fcv', { visible: true });
   await propDevPageIframe.$eval('#u9v3fcv', el => el.click());
 }
@@ -167,7 +200,7 @@ async function clickPropDevCancelProposalButton(propDevPageIframe) {
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
 async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
-  console.log(`INFO: about to click ok button on the "are you sure you want to cancel?" model popup (using $eval)`);
+  console.info(`INFO: about to click ok button on the "are you sure you want to cancel?" model popup (using $eval)`);
   await propDevPageIframe.waitForSelector('#u15k794s', { visible: true });
   await Promise.all([
     propDevPageIframe.waitForNavigation(),
@@ -182,7 +215,7 @@ async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) 
 
   //we follow the same steps for all the tries and retries
   let addBrowserTabReturnValidPdFrame = async function (tryNumber, browserTabArr) {
-    console.log(`inside try ${tryNumber} of returnChildFrameWithUrlIncluding `);
+    console.info(`inside try ${tryNumber} of returnChildFrameWithUrlIncluding `);
     //add new browser tab (we have been calling pageTab) to the array
     const tempNewBrowserTab = await browser.newPage();
     browserTabArr.push(tempNewBrowserTab);
@@ -190,7 +223,7 @@ async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) 
     await browserTabArr[tryNumber].goto(directLinkToProposal);
     //make sure page is fully loaded before looking at child frames
     const pdDocChildFrame = await returnChildFrameWithUrlIncluding(browserTabArr[tryNumber], `/kc-pd-krad/`);
-    console.log(`pdDocChildFrame.url() is: ${pdDocChildFrame.url()}`);
+    console.info(`pdDocChildFrame.url() is: ${pdDocChildFrame.url()}`);
     return pdDocChildFrame;
   };
 
@@ -219,10 +252,9 @@ async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) 
 }
 
 async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMatch) {
-  console.log(`inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
-  console.log(`NOT WORKING waiting for selector #PropDev-DocumentFooter`);
-  await parentPageObj.waitForSelector('#PropDev-DocumentFooter');
-  console.log(`after wait for selector #PropDev-DocumentFooter`);
+  console.info(`inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
+  await parentPageObj.waitForSelector('#cz-panel-container');
+  console.log(`after wait for selector #cz-panel-container`);
 
   console.log(`first just check if the mainFrame (non-child iframe) has ${strUrlPortionToMatch} in the URL`);
   console.log(`the old non-dashboard seems not to have iframes at all - if the main frame is the PD document return the single parent frame and dont even look at the children iframes, if they exist`);

@@ -1,0 +1,11 @@
+{
+    "isKrUsingNewDashboardWithIframes": true,
+    "howLongToWaitForSSOLogin": 18000,    
+    "urlToTriggerSSOLogin": "https://greendale-sbx.kuali.co/res",
+    "leftPortionOfKRDirectLinkToModule": "https://greendale-sbx.kuali.co:/res/kc-common/development-proposals/",
+    "recordNumsToUpdateInKRArr": [
+        1177,
+        1187,
+        1186
+    ]
+}
