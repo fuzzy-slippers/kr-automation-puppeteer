@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-const puppeteer = require('puppeteer');
-const fs = require('fs');
+const puppeteer = require(`puppeteer`);
+const fs = require(`fs`);
+const path = require(`path`).posix;
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
 const argv = require('yargs/yargs')(process.argv.slice(2))
@@ -17,6 +18,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
 
 (async () => {
   if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
+    const pathOfScreenshotDirInsideConfigFolder = createDirectoryToHoldScreenshots(argv.jsonconfigfile);
     const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
 
     switch (argv.automationTask) {
@@ -67,6 +69,55 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     }
   }
 
+  /**
+   * Creates a screenshot directory inside the config directory that was passed into the function. 
+   * 
+   * When naming the screenshot directory, uses the format "<jsonconfigfilename without .json>_screenshots" The new screenshots subdirectory will be used to hold screenshots made during the automation.
+   * Because there could be multiple json files, lets say with 100 KR records to update/automate listed in each config file, we want different screenshot subfolders per config file. That way if the first 
+   * config file is named "group1.json" and second called "group2.json" we would have two folders, group1_screenshots and group2_screenshots, each containing 100 screenshots. This will help us keep things
+   * better organized. 
+   * 
+   * @param {string}   jsonconfigfileArgumentPassedInFromCommandLine    The full raw jsonconfigfile argument passed into the program on the command line that points to the json config file to use.
+   * 
+   * @returns {string}    Returns the path to the screenshot subdirectory inside the config folder passed in, whether it needed to be created or not (already existed)
+   */
+  function createDirectoryToHoldScreenshots(jsonconfigfileArgumentPassedInFromCommandLine) {
+    const configFileNameWithoutJsonExtension = path.basename(jsonconfigfileArgumentPassedInFromCommandLine, '.json');
+    const screenshotsFolderName = `${configFileNameWithoutJsonExtension}_screenshots`;
+    const jsonConfigFileDirPathOnly = path.dirname(jsonconfigfileArgumentPassedInFromCommandLine);
+    const jsonConfigFileDirPathWithScreenshotSubfolder = path.join(jsonConfigFileDirPathOnly, screenshotsFolderName);
+    return createDirIfDoesntExistAndGetPath(jsonConfigFileDirPathWithScreenshotSubfolder);
+  }
+
+  /**
+   * Utility function for creating a directory at the path specified if it doesn't already exist.
+   * 
+   * adapted from: https://nodejs.dev/learn/working-with-folders-in-nodejs
+   * @param {string}   pathOfDirToCreate    The file path and folder name to try to create, including slashes (node seems to take slashes in this format (/Users/joe/test).
+   * 
+   * @returns {string}    Returns the path to the directory, whether it needed to be created or not (already existed)
+   */
+  function createDirIfDoesntExistAndGetPath(pathOfDirToCreate) {
+    try {
+      if (!fs.existsSync(pathOfDirToCreate)) {
+        fs.mkdirSync(pathOfDirToCreate)
+      }
+      return pathOfDirToCreate;
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  // /**
+  //  * Utility to strip out just the path portion (directory path) of the jsconfig file command line argument passed into the program
+  //  * 
+  //  * @param {string}   jsconfigfileFromArgv    The full jsconfigfile argument passed into the program (going into argv)
+  //  * 
+  //  * @returns {string}    The path portion of the jsconfigfile minus the json filename portion so ./path/to/file/ but not the "sampleConfig.json"
+  //  */
+  // function getPathOnlyForJsconfigfile(jsconfigfileFromArgv) {
+  //   return path.dirname(jsconfigfileFromArgv);
+  // }
 
   /**
    * Automate the cancelling of a list of KR prop dev proposals. 
