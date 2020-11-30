@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-const puppeteer = require('puppeteer');
-const fs = require('fs');
+const puppeteer = require(`puppeteer`);
+const fs = require(`fs`);
+const path = require(`path`).posix;
+
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
 const argv = require('yargs/yargs')(process.argv.slice(2))
@@ -17,11 +19,12 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
 
 (async () => {
   if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
+    const pathOfScreenshotDirInsideConfigFolder = createDirectoryToHoldScreenshots(argv.jsonconfigfile);
     const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
 
     switch (argv.automationTask) {
       case `cancelPropDevProposals`:
-        await doAutomationCancelListPropDevProposals(browser, argv.leftPortionOfKRDirectLinkToModule, argv.recordNumsToUpdateInKRArr, argv.isKrUsingNewDashboardWithIframes);
+        await doAutomationCancelListPropDevProposals(browser, argv.leftPortionOfKRDirectLinkToModule, argv.recordNumsToUpdateInKRArr, argv.isKrUsingNewDashboardWithIframes, pathOfScreenshotDirInsideConfigFolder);
         break;
       default:
         throw new Error(`the json config must specify a automationTask as one of the fields so the program knows which automation to perform`);
@@ -67,38 +70,89 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     }
   }
 
+  /**
+   * Creates a screenshot directory inside the config directory that was passed into the function. 
+   * 
+   * When naming the screenshot directory, uses the format "<jsonconfigfilename without .json>_screenshots" The new screenshots subdirectory will be used to hold screenshots made during the automation.
+   * Because there could be multiple json files, lets say with 100 KR records to update/automate listed in each config file, we want different screenshot subfolders per config file. That way if the first 
+   * config file is named "group1.json" and second called "group2.json" we would have two folders, group1_screenshots and group2_screenshots, each containing 100 screenshots. This will help us keep things
+   * better organized. 
+   * 
+   * @param {string}   jsonconfigfileArgumentPassedInFromCommandLine    The full raw jsonconfigfile argument passed into the program on the command line that points to the json config file to use.
+   * 
+   * @returns {string}    Returns the path to the screenshot subdirectory inside the config folder passed in, whether it needed to be created or not (already existed)
+   */
+  function createDirectoryToHoldScreenshots(jsonconfigfileArgumentPassedInFromCommandLine) {
+    const configFileNameWithoutJsonExtension = path.basename(jsonconfigfileArgumentPassedInFromCommandLine, '.json');
+    const screenshotsFolderName = `${configFileNameWithoutJsonExtension}_screenshots`;
+    const jsonConfigFileDirPathOnly = path.dirname(jsonconfigfileArgumentPassedInFromCommandLine);
+    const jsonConfigFileDirPathWithScreenshotSubfolder = path.join(jsonConfigFileDirPathOnly, screenshotsFolderName);
+    return createDirIfDoesntExistAndGetPath(jsonConfigFileDirPathWithScreenshotSubfolder);
+  }
+
+  /**
+   * Utility function for creating a directory at the path specified if it doesn't already exist.
+   * 
+   * adapted from: https://nodejs.dev/learn/working-with-folders-in-nodejs
+   * @param {string}   pathOfDirToCreate    The file path and folder name to try to create, including slashes (node seems to take slashes in this format (/Users/joe/test).
+   * 
+   * @returns {string}    Returns the path to the directory, whether it needed to be created or not (already existed)
+   */
+  function createDirIfDoesntExistAndGetPath(pathOfDirToCreate) {
+    try {
+      if (!fs.existsSync(pathOfDirToCreate)) {
+        fs.mkdirSync(pathOfDirToCreate)
+      }
+      return pathOfDirToCreate;
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  // /**
+  //  * Utility to strip out just the path portion (directory path) of the jsconfig file command line argument passed into the program
+  //  * 
+  //  * @param {string}   jsconfigfileFromArgv    The full jsconfigfile argument passed into the program (going into argv)
+  //  * 
+  //  * @returns {string}    The path portion of the jsconfigfile minus the json filename portion so ./path/to/file/ but not the "sampleConfig.json"
+  //  */
+  // function getPathOnlyForJsconfigfile(jsconfigfileFromArgv) {
+  //   return path.dirname(jsconfigfileFromArgv);
+  // }
 
   /**
    * Automate the cancelling of a list of KR prop dev proposals. 
+   *  
    *  
    * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
    * @param {string}   leftPortionOfKRDirectLinkToModule    The left portion of the direct link to a KR prop dev proposal, minus the proposal number portion, as would be generated from the link pop up at the top of KR prop dev module screen
    * @param {number[]} recordNumsToUpdateInKRArr    An array of the Prop Dev numbers that are used in KR as the rightmost portion of the direct link generated by the link feature of the Prop Dev module to generate a direct link/URL to pull up a specific Prop Dev record
    * @param {boolean}  krUsingNewDashboardWithIframes   Flag that indicates whether the KR dashboard is curently enabled
+   * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
    * 
    */
-  async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes) {
+  async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
+
     const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
     const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
     const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
 
-
-    await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes);
-    await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes);
-    await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes);
+    await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
 }
 
   /**
-   * Goes through the individual steps which taken together automate the cancelling of a single Prop Dev proposal (click sumary sbumit, cancel button, etc).
+   * Goes through the individual steps which taken together automate the cancelling of a single Prop Dev proposal (click sumary sbumit, cancel button, etc) and take a screenshot at the end to capture the final state.
    * 
    * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
    * @param {string}   directLinkToProposal    The full direct link to a KR prop dev proposal, minus the proposal number portion, as would be generated from the link pop up at the top of KR prop dev module screen
    * @param {boolean}  krUsingNewDashboardWithIframes   Flag that indicates whether the KR dashboard is curently enabled
+   * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
    * 
    * @return {boolean}    returns true if it makes it all the way through the steps - presumably an error would have been thrown already if not
    */
-async function automateCancellingSinglePropDevProposal(browser, directLinkToProposal, krUsingNewDashboardWithIframes) {
-  // (old comment only applicable for when KR dashboard turned on) - use function to keep trying until we get a tab open that has the iframe present that we need to update the proposal - using a function for this
+async function automateCancellingSinglePropDevProposal(browser, directLinkToProposal, krUsingNewDashboardWithIframes, pathOfScreenshotDir) {
   const pdDocIFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
   await clickPropDevEditButton(pdDocIFrame);
@@ -106,9 +160,31 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevCancelProposalButton(pdDocIFrame);
   await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
+  const pageTab1 = (await browser.pages())[0];
+  takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
   console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
+
+  /**
+   * Take a screenshot of the current KR record and action - the screenshot filename will be based on the link and prefex string like "cancelStep" passed in and placed in the folder passed in.
+   * 
+   * @param {Object}   pageTabForScreenshot    The page object pointing to the current browser tab that is being clicked on/automated (that the screenshot will be taken of)
+   * @param {string}   prefexFilenameWith    Text to include on the left hand side of the screenshot filename, so that if we want to take multiple screenshots per automation we can differentiate the different ones all done on the same KR record
+   * @param {string}   linkToUseForFileName    The direct link to a KR record - used for generating the filename for each individual screenshot
+   * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
+   * 
+   */
+function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
+  const linkUrlConvertedToFileNameFriendlyFormat = linkToUseForFileName.replace(/[^a-zA-Z0-9]/g,`_`);
+  const pathFileNameAndExtension = path.format({
+    dir: pathOfScreenshotDir,
+    name: `${prefexFilenameWith}_${linkUrlConvertedToFileNameFriendlyFormat}`,
+    ext: `.jpg`
+  });
+  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 35, fullpage: true });
+}
+
   /**
    * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
    *
