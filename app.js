@@ -158,7 +158,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevEditButton(pdDocIFrame);
   await clickPropDevMenuSummarySubmit(pdDocIFrame);
   await clickPropDevCancelProposalButton(pdDocIFrame);
-  //await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
   takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
@@ -182,7 +182,7 @@ function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFi
     name: `${prefexFilenameWith}_${linkUrlConvertedToFileNameFriendlyFormat}`,
     ext: `.jpg`
   });
-  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg` });
+  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 35, fullpage: true });
 }
 
   /**
