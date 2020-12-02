@@ -133,13 +133,37 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    */
   async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
 
-    const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
-    const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
-    const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
+    
+    // const promisesReturnedFromMap = recordNumsToUpdateInKRArr.map(async currPropDevNum => {
+    //   const currPropDevDirectLink = leftPortionOfKRDirectLinkToModule + currPropDevNum;
+    //   try {
+    //     await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    //   } catch (e) {
+    //     console.error(`CSV ERROR: automateCancellingSinglePropDevProposal of ${currPropDevNum} failed with exception ${JSON.stringify(e)}`);
+    //     const pageTab1 = (browser.pages())[0];
+    //     takeScreenshot(pageTab1, `exceptionCancelling`, currPropDevDirectLink, pathOfScreenshotDir);  
+    //   } 
+    //   const resultsOfAllPromises = await Promise.all(promisesReturnedFromMap);
+    // });
 
-    await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    
+   
+    const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
+    // const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
+    // const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
+
+    try {
+      await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    } catch (e) {
+      // statements to handle any exceptions
+      console.error(`automateCancellingSinglePropDevProposal of _PDNUM_ failed with exception ${JSON.stringify(e)}`);
+      const pageTab1 = (await browser.pages())[0];
+      takeScreenshot(pageTab1, `exceptionOnPD_PDNUM_`, PropDev1, pathOfScreenshotDir);      
+    }
+    
+    //await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    // await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    // await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
 }
 
   /**
@@ -158,7 +182,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevEditButton(pdDocIFrame);
   await clickPropDevMenuSummarySubmit(pdDocIFrame);
   await clickPropDevCancelProposalButton(pdDocIFrame);
-  await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  //////////await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
   takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
@@ -244,7 +268,10 @@ async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWai
  */
 async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal) {
   if (krUsingNewDashboardWithIframes) {
-    return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
+    //return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
+    const pageTab1 = (await browser.pages())[0];
+    await pageTab1.goto(directLinkToProposal);
+    return returnChildFrameWithUrlIncluding(pageTab1, `/kc-pd-krad/`)
   }
   else {
     // for KR with the dashboard turned off - open the proposal in the first browser tab and then return the parent frame
@@ -328,6 +355,7 @@ async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) 
     browserTabArr.push(tempNewBrowserTab);
     //open prop dev proposal in new pageTab
     await browserTabArr[tryNumber].goto(directLinkToProposal);
+    
     //make sure page is fully loaded before looking at child frames
     const pdDocChildFrame = await returnChildFrameWithUrlIncluding(browserTabArr[tryNumber], `/kc-pd-krad/`);
     console.info(`pdDocChildFrame.url() is: ${pdDocChildFrame.url()}`);
@@ -360,10 +388,25 @@ async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) 
 
 async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMatch) {
   console.info(`inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
-  await parentPageObj.waitForSelector('#cz-panel-container');
-  console.log(`after wait for selector #cz-panel-container`);
+  //await parentPageObj.waitForSelector('#root');
+  //console.log(`INFO: after wait for selector #root`);
+  await parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' });
+  console.log(`INFO: after doing parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' }), parentPageObj.mainFrame().childFrames().length is now: ${parentPageObj.mainFrame().childFrames().length}`);  
+  for (const frame of parentPageObj.mainFrame().childFrames()){
+    console.log(`initial frame.url() of the current child frame is: ${frame.url()}`);
+    console.log(`after waitForNavigation frame.url() of the current child frame is: ${frame.url()}`);
+    // Here you can use few identifying methods like url(),name(),title()
+    if (frame.url().includes(strUrlPortionToMatch)){
+        console.log(`we found the iframe with url containing ${strUrlPortionToMatch} with name: ${frame.name()}`);
+        return frame;
+    }
+}
+throw new Error(
+  `throwing error because did not detect any child frames matching: ${strUrlPortionToMatch}`
+);
 
-  console.log(`first just check if the mainFrame (non-child iframe) has ${strUrlPortionToMatch} in the URL`);
+
+/*   console.log(`first just check if the mainFrame (non-child iframe) has ${strUrlPortionToMatch} in the URL`);
   console.log(`the old non-dashboard seems not to have iframes at all - if the main frame is the PD document return the single parent frame and dont even look at the children iframes, if they exist`);
   if (parentPageObj.mainFrame().url().includes(strUrlPortionToMatch)) {
     return parentPageObj.mainFrame();
@@ -371,9 +414,15 @@ async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMa
   else {
     console.log(`parentPageObj.mainFrame().url() is ${parentPageObj.mainFrame().url()}`)
     console.log(`parentPageObj.mainFrame().childFrames().length is: ${parentPageObj.mainFrame().childFrames().length}`)
+    // MAY NOT NEED IF ANY LONGER!!!!
+    // if (parentPageObj.mainFrame().childFrames().length <= 1) {
+    //   console.log(`INFO: detected parentPageObj.mainFrame().childFrames().length <= 1`);
+    //   await parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' });
+    //   console.log(`INFO: after doing parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' }), parentPageObj.mainFrame().childFrames().length is now: ${parentPageObj.mainFrame().childFrames().length}`);
+    // }
+
     for (const frame of parentPageObj.mainFrame().childFrames()){
         console.log(`initial frame.url() of the current child frame is: ${frame.url()}`);
-        //frame.waitForNavigation({ waitUntil: 'networkidle0' });
         console.log(`after waitForNavigation frame.url() of the current child frame is: ${frame.url()}`);
         // Here you can use few identifying methods like url(),name(),title()
         if (frame.url().includes(strUrlPortionToMatch)){
@@ -384,5 +433,6 @@ async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMa
     throw new Error(
       `throwing error because did not detect any child frames matching: ${strUrlPortionToMatch}`
     );
-  }
+  } */
+
 }
