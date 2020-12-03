@@ -133,13 +133,37 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    */
   async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
 
-    const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
-    const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
-    const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
+    
+    // const promisesReturnedFromMap = recordNumsToUpdateInKRArr.map(async currPropDevNum => {
+    //   const currPropDevDirectLink = leftPortionOfKRDirectLinkToModule + currPropDevNum;
+    //   try {
+    //     await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    //   } catch (e) {
+    //     console.error(`CSV ERROR: automateCancellingSinglePropDevProposal of ${currPropDevNum} failed with exception ${JSON.stringify(e)}`);
+    //     const pageTab1 = (browser.pages())[0];
+    //     takeScreenshot(pageTab1, `exceptionCancelling`, currPropDevDirectLink, pathOfScreenshotDir);  
+    //   } 
+    //   const resultsOfAllPromises = await Promise.all(promisesReturnedFromMap);
+    // });
 
-    await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    
+   
+    const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
+    // const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
+    // const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
+
+    try {
+      await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    } catch (e) {
+      // statements to handle any exceptions
+      console.error(`automateCancellingSinglePropDevProposal of _PDNUM_ failed with exception ${JSON.stringify(e)}`);
+      const pageTab1 = (await browser.pages())[0];
+      takeScreenshot(pageTab1, `exceptionOnPD_PDNUM_`, PropDev1, pathOfScreenshotDir);      
+    }
+    
+    //await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    // await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+    // await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
 }
 
   /**
@@ -228,14 +252,15 @@ async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWai
  *
  * Because Kuali Research often has tons of nested iframes when the dashboard is
  * turned on and because Puppeteer needs to be passed the exact iframe that
- * contains the the proposal etc that we are trying to do data entry on
+ * contains the proposal etc that we are trying to do data entry on
  * and because for the old non-dashboard version there were no iframes, this
  * helper function figured out the whether to pass back the main frame or the
  * relevant child iframe that actually contains the KR document that has the
  * form elements/boxes that contain the proposal, etc info
- *
- *
- *
+ * Opens the proposal in the first browser tab and then returns either the parent frame
+ * or the relevant child frame by lookiing for a particular portion of the URL of the 
+ * child iframe URL that indicates its the iframe that contains the actual KR document 
+ * with the form fields, etc to be clicked on, etc
  * @param {boolean}   krUsingNewDashboardWithIframes           Flag that indicates whether the KR dashboard is curently enabled
  * @param {Object} browser     The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
  * @param {string}   directLinkToProposal The URL of the KR record as would be generated from the link pop up at the top of KR proposal, award, etc records
@@ -243,13 +268,12 @@ async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWai
  * @return {Object} Returns the mainFrame or childFrame puppeteer object that points to the actual KR document which contains the form elements that will need to have the automated data entry done.
  */
 async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal) {
+  const pageTab1 = (await browser.pages())[0];
+  await pageTab1.goto(directLinkToProposal);
   if (krUsingNewDashboardWithIframes) {
-    return openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
+    return returnChildFrameWithUrlIncluding(pageTab1, `/kc-pd-krad/`)
   }
   else {
-    // for KR with the dashboard turned off - open the proposal in the first browser tab and then return the parent frame
-    const pageTab1 = (await browser.pages())[0];
-    await pageTab1.goto(directLinkToProposal);
     return pageTab1.mainFrame();
   }
 }
@@ -263,10 +287,6 @@ async function clickPropDevEditButton(propDevPageIframe) {
   console.info(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
   await propDevPageIframe.waitForSelector('#u15ecnpy');
   console.info(`INFO: selector #u15ecnpy appears to be loaded`);
-  //let element = await propDevPageIframe.$('#u15ecnpy');
-  //console.info(`INFO: element for edit button: ${element}`);
-  //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
-  //console.info(`INFO: value for edit button: ${value}`);
   await Promise.all([
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.click('#u15ecnpy'),
@@ -315,74 +335,29 @@ async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
   ]);    
 }
 
-//---------------------ONLY USEFUL FOR WHEN KR DASHBOARD USING IFRAMES IS TURNED ON-------------------//
-
-async function openProposalInNewTabReturnPdFrame(browser, directLinkToProposal) {
-  const browserTabs = [];
-
-  //we follow the same steps for all the tries and retries
-  let addBrowserTabReturnValidPdFrame = async function (tryNumber, browserTabArr) {
-    console.info(`inside try ${tryNumber} of returnChildFrameWithUrlIncluding `);
-    //add new browser tab (we have been calling pageTab) to the array
-    const tempNewBrowserTab = await browser.newPage();
-    browserTabArr.push(tempNewBrowserTab);
-    //open prop dev proposal in new pageTab
-    await browserTabArr[tryNumber].goto(directLinkToProposal);
-    //make sure page is fully loaded before looking at child frames
-    const pdDocChildFrame = await returnChildFrameWithUrlIncluding(browserTabArr[tryNumber], `/kc-pd-krad/`);
-    console.info(`pdDocChildFrame.url() is: ${pdDocChildFrame.url()}`);
-    return pdDocChildFrame;
-  };
-
-  // try this 5 times - unfortunately, sometimes does not load all the iframes so using try catch to try with multiple tabs if this happens until we get one that has the PD iframe need to click on things/update PD
-  try {
-    return await addBrowserTabReturnValidPdFrame(0,browserTabs);
-  } catch {
-    try {
-      return await addBrowserTabReturnValidPdFrame(1,browserTabs);
-    } catch {
-      try {
-        return await addBrowserTabReturnValidPdFrame(2,browserTabs);
-      } catch {
-        try {
-          return await addBrowserTabReturnValidPdFrame(3,browserTabs);
-        } catch {
-          try {
-            return await addBrowserTabReturnValidPdFrame(4,browserTabs);
-          } catch {
-            console.log(`in catch block of 5th try (tryNumber index 4) of addBrowserTabReturnValidPdFrame`);
-          }
-        }
-      }
-    }
-  }
-}
-
+/**
+ * Goes through the nested iframes used by KR with the dashboard and tries to pick out the iframe that actually contains the KR document (with form fields, etc) by matching on a portion of the URL of the iframe
+ * 
+ * It first waits for the outer iframe and inner iframes to fully load using the waituntil feature in Puppeteer
+ * then loops through all the child frames looking for one where the URL has the URL fragment passed in that tends to be 
+ * specific to a KR document's URL (PD may be different than award so the URL is a parameter to pass in)
+ * 
+ * Using the $eval seemed to work consistently for this to do the clicking (there might be some considerations given its inside a bootstrap model window) - also found that I needed to use the promise.all around it with a waitForNavigation() call or else when it tried to open the next proposal (next run of the doAutomatedDataEntryTasks function) it was showing a connection error navigating to the next proposal and it appears to be that it wasn't waiting until the page loaded after clicking the button, even though this one proposal would cancel
+ * @param {Object} parentPageObj     A puppeteer page object that points to the parent iframe (that potentially has child iframes within that might be the actual KR document with form fields, etd).
+ * @param {string} strUrlPortionToMatch   A string containing a portion of a url that would identify a frame that has a KR document inside (with form fields, etc) - different KR modules likely have slightly different URLs - for example the Iframe with the KR Prop Dev records alwasys seems to have `/kc-pd-krad/` as part of the URL
+ */
 async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMatch) {
   console.info(`inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
-  await parentPageObj.waitForSelector('#cz-panel-container');
-  console.log(`after wait for selector #cz-panel-container`);
-
-  console.log(`first just check if the mainFrame (non-child iframe) has ${strUrlPortionToMatch} in the URL`);
-  console.log(`the old non-dashboard seems not to have iframes at all - if the main frame is the PD document return the single parent frame and dont even look at the children iframes, if they exist`);
-  if (parentPageObj.mainFrame().url().includes(strUrlPortionToMatch)) {
-    return parentPageObj.mainFrame();
-  }
-  else {
-    console.log(`parentPageObj.mainFrame().url() is ${parentPageObj.mainFrame().url()}`)
-    console.log(`parentPageObj.mainFrame().childFrames().length is: ${parentPageObj.mainFrame().childFrames().length}`)
-    for (const frame of parentPageObj.mainFrame().childFrames()){
-        console.log(`initial frame.url() of the current child frame is: ${frame.url()}`);
-        //frame.waitForNavigation({ waitUntil: 'networkidle0' });
-        console.log(`after waitForNavigation frame.url() of the current child frame is: ${frame.url()}`);
-        // Here you can use few identifying methods like url(),name(),title()
-        if (frame.url().includes(strUrlPortionToMatch)){
-            console.log(`we found the iframe with url containing ${strUrlPortionToMatch} with name: ${frame.name()}`);
-            return frame;
-        }
+  await parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' });
+  console.log(`INFO: after doing parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' }), parentPageObj.mainFrame().childFrames().length is now: ${parentPageObj.mainFrame().childFrames().length}`);  
+  for (const frame of parentPageObj.mainFrame().childFrames()){
+    console.log(`initial frame.url() of the current child frame is: ${frame.url()}`);
+    if (frame.url().includes(strUrlPortionToMatch)){
+        console.log(`INFO: we found the iframe with url containing ${strUrlPortionToMatch} with name: ${frame.name()}`);
+        return frame;
     }
-    throw new Error(
-      `throwing error because did not detect any child frames matching: ${strUrlPortionToMatch}`
-    );
-  }
-}
+ }
+  throw new Error(
+    `throwing error because did not detect any child frames matching: ${strUrlPortionToMatch}`
+  )
+};
