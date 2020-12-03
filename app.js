@@ -109,19 +109,11 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     }
   }
 
-  // /**
-  //  * Utility to strip out just the path portion (directory path) of the jsconfig file command line argument passed into the program
-  //  * 
-  //  * @param {string}   jsconfigfileFromArgv    The full jsconfigfile argument passed into the program (going into argv)
-  //  * 
-  //  * @returns {string}    The path portion of the jsconfigfile minus the json filename portion so ./path/to/file/ but not the "sampleConfig.json"
-  //  */
-  // function getPathOnlyForJsconfigfile(jsconfigfileFromArgv) {
-  //   return path.dirname(jsconfigfileFromArgv);
-  // }
 
   /**
    * Automate the cancelling of a list of KR prop dev proposals. 
+   * 
+   * Using a for loop because unfortunately map and foreach which can be used to write function programming syle code are not asyncronous and adding await inside the loop was causing it to try to parallel run everything inside cancel functions (trying to click the first link for all the proposals at once, which doesnt work if you are doing everything in the same browser tab)
    *  
    *  
    * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
@@ -132,52 +124,10 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    * 
    */
   async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
-
-    
-    // const promisesReturnedFromMap = recordNumsToUpdateInKRArr.map(async currPropDevNum => {
-    //   const currPropDevDirectLink = leftPortionOfKRDirectLinkToModule + currPropDevNum;
-    //   try {
-    //     await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    //   } catch (e) {
-    //     console.error(`CSV ERROR: automateCancellingSinglePropDevProposal of ${currPropDevNum} failed with exception ${JSON.stringify(e)}`);
-    //     const pageTab1 = (browser.pages())[0];
-    //     takeScreenshot(pageTab1, `exceptionCancelling`, currPropDevDirectLink, pathOfScreenshotDir);  
-    //   } 
-    //   const resultsOfAllPromises = await Promise.all(promisesReturnedFromMap);
-    // });
     for (let i = 0; i < recordNumsToUpdateInKRArr.length; i++) {
       await tryCancellingSinglePropDevProposalCaptureScreenshotOnException(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr[i], isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
     }
-
-    //await tryCancellingSinglePropDevProposalCaptureScreenshotOnException(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr[1], isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    //await tryCancellingSinglePropDevProposalCaptureScreenshotOnException(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr[2], isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-
-    // // will need to convert to some kind of looping later
-    // const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
-    // try {
-    //   await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // } catch (e) {
-    //   // statements to handle any exceptions
-    //   console.error(`automateCancellingSinglePropDevProposal of ${recordNumsToUpdateInKRArr[1]} failed with exception ${JSON.stringify(e)}`);
-    //   const pageTab1 = (await browser.pages())[0];
-    //   takeScreenshot(pageTab1, `exceptionOnPD${recordNumsToUpdateInKRArr[1]}`, PropDev1, pathOfScreenshotDir);      
-    // }    
-    
-    
-    // const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
-    // try {
-    //   await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // } catch (e) {
-    //   // statements to handle any exceptions
-    //   console.error(`automateCancellingSinglePropDevProposal of ${recordNumsToUpdateInKRArr[2]} failed with exception ${JSON.stringify(e)}`);
-    //   const pageTab1 = (await browser.pages())[0];
-    //   takeScreenshot(pageTab1, `exceptionOnPD${recordNumsToUpdateInKRArr[2]}`, PropDev1, pathOfScreenshotDir);      
-    // }    
-    
-    //await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-}
+  }
 
   /**
    * Adds in a try catch block around the function to cancel a prop dev proposal and on any kind of exeption, takes a screenshot of the current tab
@@ -222,7 +172,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevEditButton(pdDocIFrame);
   await clickPropDevMenuSummarySubmit(pdDocIFrame);
   await clickPropDevCancelProposalButton(pdDocIFrame);
-  /////await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
   takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
