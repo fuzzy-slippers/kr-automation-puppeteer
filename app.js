@@ -202,7 +202,7 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
     width: 800,
     height: 1000
   });
-  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 35, fullpage: true });
+  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 30, fullpage: true });
 }
 
   /**
@@ -222,7 +222,7 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
    * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
    */
 async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
-  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
+  const browser = await puppeteer.launch({headless: false});    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
   const pageTab1 = (await browser.pages())[0];
   await pageTab1.goto(KrDashboardUrl);
   await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
