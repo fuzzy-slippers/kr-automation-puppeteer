@@ -150,7 +150,7 @@ async function tryCancellingSinglePropDevProposalCaptureScreenshotOnException(br
     await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
   } catch (e) {
     // statements to handle any exceptions
-    console.error(`automateCancellingSinglePropDevProposal of ${krRecordNumberToUpdate} failed with exception ${JSON.stringify(e)}`);
+    console.error(`automateCancellingSinglePropDevProposal with PD number: ${krRecordNumberToUpdate} failed with exception: ${(e.name + ': ' + e.message)}`);
     const pageTab1 = (await browser.pages())[0];
     takeScreenshot(pageTab1, `exceptionOnPD${krRecordNumberToUpdate}`, currPropDevDirectLink, pathOfScreenshotDir);      
   }  
@@ -175,7 +175,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
-  takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
+  await takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
   console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
@@ -183,18 +183,24 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   /**
    * Take a screenshot of the current KR record and action - the screenshot filename will be based on the link and prefex string like "cancelStep" passed in and placed in the folder passed in.
    * 
+   * Also changes the viewport size so that its verically very long so that the screenshot will capture everything (that was the only way I was getting a screenshot of the top error messages to be included)
+
    * @param {Object}   pageTabForScreenshot    The page object pointing to the current browser tab that is being clicked on/automated (that the screenshot will be taken of)
    * @param {string}   prefexFilenameWith    Text to include on the left hand side of the screenshot filename, so that if we want to take multiple screenshots per automation we can differentiate the different ones all done on the same KR record
    * @param {string}   linkToUseForFileName    The direct link to a KR record - used for generating the filename for each individual screenshot
    * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
    * 
    */
-function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
+async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
   const linkUrlConvertedToFileNameFriendlyFormat = linkToUseForFileName.replace(/[^a-zA-Z0-9]/g,`_`);
   const pathFileNameAndExtension = path.format({
     dir: pathOfScreenshotDir,
     name: `${prefexFilenameWith}_${linkUrlConvertedToFileNameFriendlyFormat}`,
     ext: `.jpg`
+  });
+  await pageTabForScreenshot.setViewport({
+    width: 800,
+    height: 1000
   });
   pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 35, fullpage: true });
 }
