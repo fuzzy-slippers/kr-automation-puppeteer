@@ -182,7 +182,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevEditButton(pdDocIFrame);
   await clickPropDevMenuSummarySubmit(pdDocIFrame);
   await clickPropDevCancelProposalButton(pdDocIFrame);
-  //////////await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
   takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
@@ -287,10 +287,6 @@ async function clickPropDevEditButton(propDevPageIframe) {
   console.info(`INFO: about to click on edit button, first step waiting for selector #u15ecnpy`);
   await propDevPageIframe.waitForSelector('#u15ecnpy');
   console.info(`INFO: selector #u15ecnpy appears to be loaded`);
-  //let element = await propDevPageIframe.$('#u15ecnpy');
-  //console.info(`INFO: element for edit button: ${element}`);
-  //let value = await propDevPageIframe.evaluate(el => el.textContent, element)
-  //console.info(`INFO: value for edit button: ${value}`);
   await Promise.all([
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.click('#u15ecnpy'),
