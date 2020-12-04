@@ -1,9 +1,5 @@
 # 
 
-# usage
-node app.js --jsonconfigfile=.\sampleConfigFiles\cancelPropDev\cancelPropDevsList1.json
-
-
 # kr-automation-puppeteer
 
 Utility using puppeteer to do automated data entry tasks via KR.
