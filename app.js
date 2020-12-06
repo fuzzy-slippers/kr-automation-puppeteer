@@ -109,19 +109,11 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     }
   }
 
-  // /**
-  //  * Utility to strip out just the path portion (directory path) of the jsconfig file command line argument passed into the program
-  //  * 
-  //  * @param {string}   jsconfigfileFromArgv    The full jsconfigfile argument passed into the program (going into argv)
-  //  * 
-  //  * @returns {string}    The path portion of the jsconfigfile minus the json filename portion so ./path/to/file/ but not the "sampleConfig.json"
-  //  */
-  // function getPathOnlyForJsconfigfile(jsconfigfileFromArgv) {
-  //   return path.dirname(jsconfigfileFromArgv);
-  // }
 
   /**
    * Automate the cancelling of a list of KR prop dev proposals. 
+   * 
+   * Using a for loop because unfortunately map and foreach which can be used to write function programming syle code are not asyncronous and adding await inside the loop was causing it to try to parallel run everything inside cancel functions (trying to click the first link for all the proposals at once, which doesnt work if you are doing everything in the same browser tab)
    *  
    *  
    * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
@@ -132,38 +124,36 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    * 
    */
   async function doAutomationCancelListPropDevProposals(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
-
-    
-    // const promisesReturnedFromMap = recordNumsToUpdateInKRArr.map(async currPropDevNum => {
-    //   const currPropDevDirectLink = leftPortionOfKRDirectLinkToModule + currPropDevNum;
-    //   try {
-    //     await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    //   } catch (e) {
-    //     console.error(`CSV ERROR: automateCancellingSinglePropDevProposal of ${currPropDevNum} failed with exception ${JSON.stringify(e)}`);
-    //     const pageTab1 = (browser.pages())[0];
-    //     takeScreenshot(pageTab1, `exceptionCancelling`, currPropDevDirectLink, pathOfScreenshotDir);  
-    //   } 
-    //   const resultsOfAllPromises = await Promise.all(promisesReturnedFromMap);
-    // });
-
-    
-   
-    const PropDev1 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[0];
-    // const PropDev2 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[1];
-    // const PropDev3 = leftPortionOfKRDirectLinkToModule + recordNumsToUpdateInKRArr[2];
-
-    try {
-      await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    } catch (e) {
-      // statements to handle any exceptions
-      console.error(`automateCancellingSinglePropDevProposal of _PDNUM_ failed with exception ${JSON.stringify(e)}`);
-      const pageTab1 = (await browser.pages())[0];
-      takeScreenshot(pageTab1, `exceptionOnPD_PDNUM_`, PropDev1, pathOfScreenshotDir);      
+    for (let i = 0; i < recordNumsToUpdateInKRArr.length; i++) {
+      await tryCancellingSinglePropDevProposalCaptureScreenshotOnException(browser, leftPortionOfKRDirectLinkToModule, recordNumsToUpdateInKRArr[i], isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
     }
-    
-    //await automateCancellingSinglePropDevProposal(browser, PropDev1, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // await automateCancellingSinglePropDevProposal(browser, PropDev2, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
-    // await automateCancellingSinglePropDevProposal(browser, PropDev3, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+  }
+
+  /**
+   * Adds in a try catch block around the function to cancel a prop dev proposal and on any kind of exeption, takes a screenshot of the current tab
+   *  
+   * The main reason we needed to split this out into it's own function is that the await call seemed to only work correctly when this
+   * was it's own function. This way we can preface each call with await and each individual one would have it's own catch block...so if there
+   * are 5 in a list of 100 that failed, we would take screenshots of each one with an exception. Also without this broken out into a separate
+   * function with await, the program was trying to do everything in parallel with it doing the first click step for all N number of proposals at the same time 
+   * which obviously doesn't work when you only have a single browser tab
+   * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
+   * @param {string}   leftPortionOfKRDirectLinkToModule    The left portion of the direct link to a KR prop dev proposal, minus the proposal number portion, as would be generated from the link pop up at the top of KR prop dev module screen
+   * @param {number}   krRecordNumberToUpdate   The current KR record number (Prop Dev number, award number, etc) we are currently updating/automating    
+   * @param {boolean}  krUsingNewDashboardWithIframes   Flag that indicates whether the KR dashboard is curently enabled
+   * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
+   * 
+   */
+async function tryCancellingSinglePropDevProposalCaptureScreenshotOnException(browser, leftPortionOfKRDirectLinkToModule, krRecordNumberToUpdate, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir) {
+  const currPropDevDirectLink = leftPortionOfKRDirectLinkToModule + krRecordNumberToUpdate;
+  try {
+    await automateCancellingSinglePropDevProposal(browser, currPropDevDirectLink, isKrUsingNewDashboardWithIframes, pathOfScreenshotDir);
+  } catch (e) {
+    // statements to handle any exceptions
+    console.error(`automateCancellingSinglePropDevProposal with PD number: ${krRecordNumberToUpdate} failed with exception: ${(e.name + ': ' + e.message)}`);
+    const pageTab1 = (await browser.pages())[0];
+    takeScreenshot(pageTab1, `exceptionOnPD${krRecordNumberToUpdate}`, currPropDevDirectLink, pathOfScreenshotDir);      
+  }  
 }
 
   /**
@@ -185,7 +175,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
 
   const pageTab1 = (await browser.pages())[0];
-  takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
+  await takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
   console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
   return true; // cancelled the proposal
 }
@@ -193,20 +183,26 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   /**
    * Take a screenshot of the current KR record and action - the screenshot filename will be based on the link and prefex string like "cancelStep" passed in and placed in the folder passed in.
    * 
+   * Also changes the viewport size so that its verically very long so that the screenshot will capture everything (that was the only way I was getting a screenshot of the top error messages to be included)
+
    * @param {Object}   pageTabForScreenshot    The page object pointing to the current browser tab that is being clicked on/automated (that the screenshot will be taken of)
    * @param {string}   prefexFilenameWith    Text to include on the left hand side of the screenshot filename, so that if we want to take multiple screenshots per automation we can differentiate the different ones all done on the same KR record
    * @param {string}   linkToUseForFileName    The direct link to a KR record - used for generating the filename for each individual screenshot
    * @param {string}   pathOfScreenshotDir    The path of the folder to add screenshots as the proposals are being closed to better see what happened.  
    * 
    */
-function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
+async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
   const linkUrlConvertedToFileNameFriendlyFormat = linkToUseForFileName.replace(/[^a-zA-Z0-9]/g,`_`);
   const pathFileNameAndExtension = path.format({
     dir: pathOfScreenshotDir,
     name: `${prefexFilenameWith}_${linkUrlConvertedToFileNameFriendlyFormat}`,
     ext: `.jpg`
   });
-  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 35, fullpage: true });
+  await pageTabForScreenshot.setViewport({
+    width: 800,
+    height: 1000
+  });
+  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 30, fullpage: true });
 }
 
   /**
@@ -226,7 +222,7 @@ function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFi
    * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
    */
 async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
-  const browser = await puppeteer.launch({headless: false,  args: ['--disable-features=site-per-process']}); //useful to see whats going on: slowMo: 250,
+  const browser = await puppeteer.launch({headless: false});    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
   const pageTab1 = (await browser.pages())[0];
   await pageTab1.goto(KrDashboardUrl);
   await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
