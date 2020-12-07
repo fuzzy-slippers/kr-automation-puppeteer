@@ -1,6 +1,9 @@
 # Local Configs excluded - only check in the sample configs in the sampleConfigFiles folder
 umdSpecificConfigFiles
 
+# this app used a security_related folder to store things like temp cookie values that shouldnt be checked into git
+security_related
+
 # Logs
 logs
 *.log
@@ -108,3 +111,4 @@ dist
 
 # VSCode related
 .vscode
+

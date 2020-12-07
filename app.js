@@ -3,6 +3,9 @@ const puppeteer = require(`puppeteer`);
 const fs = require(`fs`);
 const path = require(`path`).posix;
 
+// change to argument value with default value false
+const useHeadlessInvisibleBrowserObj = {headless: false}; 
+
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
 const argv = require('yargs/yargs')(process.argv.slice(2))
@@ -21,6 +24,9 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
   if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
     const pathOfScreenshotDirInsideConfigFolder = createDirectoryToHoldScreenshots(argv.jsonconfigfile);
     const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
+
+    const pathToSecurityRelatedDirectory = createDirIfDoesntExistAndGetPath(`./security_related`);
+    await saveCopyOfCookiesEnvironmentVar(browser, pathToSecurityRelatedDirectory);
 
     switch (argv.automationTask) {
       case `cancelPropDevProposals`:
@@ -68,6 +74,38 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     else {
       return true;
     }
+  }
+
+ /**
+   * Record to disk the cookies from the presently open browser session to the path specified so that we can open additional browser sessions without needing to log in again.
+   *
+   * Having a browser object passed in as that is what the calling function typicall has available, so just lookup the page object of the first tab which then allows us to get the cookies.
+   * Stores the cookies as a JSON file hard coded as "cookies.json" but with the path being passed in - planning to use a special security related folder that will be in the gitignore so that it wont be checked into version control, but the path will be handled at the level of the function that calls this, just specifying the folder once it's been created/determined
+   * I had explored using temporary environment variables as an alternative but node does not appear to be able to write out environment variable data to the operating system, so that didn't seem like it could be viable, so went with saving to disk as all the examples I could find of puppeteer cookies were doing.
+
+   * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
+   * @param {string}    dirToStoreCookies The path of the folder to use to store the cookies.json file this function creates - the folder is passed in and handled outside of this function although the plan is for it to be a folder that is listed in the gitignore file so that the cookies wont be checked into version control - for example a "security_related" folder that is only used locally - decided to pass this in as the same path would be used in the function to retrieve the cookies as well, so not great to duplicate that code multiple places
+   */
+  async function saveCopyOfCookiesEnvironmentVar(browser, dirToStoreCookies) {
+    const pageTab1 = (await browser.pages())[0];
+    const cookies = await pageTab1.cookies();
+    const cookieJson = JSON.stringify(cookies);
+    console.info(`INFO: the browser cookieJson is showing: 
+    ${cookieJson}`);
+    fs.writeFileSync(`${dirToStoreCookies}/cookies.json`, cookieJson)
+
+  }
+
+  async function retrieveLoginCookiesOrIfExpiredPromptUserForLogin(browser, dirToStoreCookies) {
+
+    //TODO: decide whether these cookies are expired - if so, likely will need to prompt for visiable browser login (if valid, can skip that step)
+    const pathToSecurityRelatedDirectory = createDirIfDoesntExistAndGetPath(`./security_related`);
+
+    const cookies = fs.readFileSync('cookies.json', 'utf8')
+    const deserializedCookies = JSON.parse(`${dirToStoreCookies}/cookies.json`);
+    await page.setCookie(...deserializedCookies)
+    console.info()
+
   }
 
   /**
@@ -152,7 +190,7 @@ async function tryCancellingSinglePropDevProposalCaptureScreenshotOnException(br
     // statements to handle any exceptions
     console.error(`automateCancellingSinglePropDevProposal with PD number: ${krRecordNumberToUpdate} failed with exception: ${(e.name + ': ' + e.message)}`);
     const pageTab1 = (await browser.pages())[0];
-    takeScreenshot(pageTab1, `exceptionOnPD${krRecordNumberToUpdate}`, currPropDevDirectLink, pathOfScreenshotDir);      
+    takeScreenshot(pageTab1, `exceptionOnPD`, currPropDevDirectLink, pathOfScreenshotDir);      
   }  
 }
 
@@ -177,6 +215,7 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   const pageTab1 = (await browser.pages())[0];
   await takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
   console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
+
   return true; // cancelled the proposal
 }
 
@@ -195,7 +234,7 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
   const linkUrlConvertedToFileNameFriendlyFormat = linkToUseForFileName.replace(/[^a-zA-Z0-9]/g,`_`);
   const pathFileNameAndExtension = path.format({
     dir: pathOfScreenshotDir,
-    name: `${prefexFilenameWith}_${linkUrlConvertedToFileNameFriendlyFormat}`,
+    name: `${linkUrlConvertedToFileNameFriendlyFormat}__${prefexFilenameWith}`,
     ext: `.jpg`
   });
   await pageTabForScreenshot.setViewport({
@@ -222,7 +261,7 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
    * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
    */
 async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
-  const browser = await puppeteer.launch({headless: false});    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
+  const browser = await puppeteer.launch(useHeadlessInvisibleBrowserObj);    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
   const pageTab1 = (await browser.pages())[0];
   await pageTab1.goto(KrDashboardUrl);
   await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
@@ -277,6 +316,7 @@ async function getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, brow
 /**
  * Clicks on the Edit button at the bottom of the Prop Dev Details tab after making sure the edit button has loaded
  *
+ * Set the timeout to 3 seconds so that for proposals that are no editable, we don't have to wait as long for the exception and screenshot and moving onto the next proposal (speed up moving through a big list of proposals)
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
 async function clickPropDevEditButton(propDevPageIframe) {
@@ -329,6 +369,35 @@ async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
     propDevPageIframe.waitForNavigation(),
     propDevPageIframe.$eval('#u15k794s', el => el.click()),
   ]);    
+}
+
+/**
+ * NOT YET WORKING - Confirm that the Prop Dev record was really cancelled by checking the status showing on the page/screen at the end
+ * 
+ * Using the $eval seemed to work consistently for this to do the clicking (there might be some considerations given its inside a bootstrap model window) - also found that I needed to use the promise.all around it with a waitForNavigation() call or else when it tried to open the next proposal (next run of the doAutomatedDataEntryTasks function) it was showing a connection error navigating to the next proposal and it appears to be that it wasn't waiting until the page loaded after clicking the button, even though this one proposal would cancel
+ * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
+ */
+async function confirmPropDevReallyCancelled(propDevPageIframe) {
+  console.info(`INFO: attempting to confirmPropDevReallyCancelled`);
+
+  try {
+    console.info(`INFO: inside try of confirmPropDevReallyCancelled, about to try to get proposalNameTextOnPage`);
+    console.info(`INFO: about to do propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper')`)
+    await propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper');
+    console.info(`INFO: after propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper'), about to try to get innerHTML `);
+    const html = await propDevPageIframe.$eval('#PropDev-DefaultView_headerWrapper', e => e.innerHTML); 
+    console.info(`INFO: #PropDev-DefaultView_headerWrapper innerHtml showing: ${html}`);
+    const proposalNameTextOnPage = await propDevPageIframe.$eval('#u1p8pc9q', e => e.innerText); 
+    console.info(`INFO: got proposalNameTextOnPage: ${proposalNameTextOnPage}`)
+    const proposalNumberTextOnPage = await propDevPageIframe.$eval('#PropDev-DefaultView_header > span.uif-headerText-span', e => e.innerText);
+    console.info(`INFO: got proposalNumberTextOnPage: ${proposalNumberTextOnPage}`)
+    const proposalStatusTextOnPage = await propDevPageIframe.$eval('#u1wvlcrs', e => e.innerText); 
+    console.log(`CSV: ${proposalNameTextOnPage}|${proposalNumberTextOnPage}|Status:|${proposalStatusTextOnPage}`);
+  } catch (e) {
+    console.error(`ERROR: inside error block for confirmPropDevReallyCancelled`);
+    console.error(`ERROR: inside confirmPropDevReallyCancelled checking for, exception is ${e.name}:${e.message} `);
+  }
+
 }
 
 /**
