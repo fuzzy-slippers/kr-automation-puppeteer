@@ -4,8 +4,9 @@ const fs = require(`fs`);
 const path = require(`path`).posix;
 
 // change to argument value with default value false
-const useHeadlessInvisibleBrowserObj = {headless: false}; 
+const useHeadlessInvisibleBrowserObj = {headless: true}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
+//TODO: also make jpeg quality a property specified in the config json file
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -451,11 +452,11 @@ async function confirmPropDevReallyCancelled(propDevPageIframe) {
  * @param {string} strUrlPortionToMatch   A string containing a portion of a url that would identify a frame that has a KR document inside (with form fields, etc) - different KR modules likely have slightly different URLs - for example the Iframe with the KR Prop Dev records alwasys seems to have `/kc-pd-krad/` as part of the URL
  */
 async function returnChildFrameWithUrlIncluding(parentPageObj, strUrlPortionToMatch) {
-  console.info(`inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
+  console.info(`INFO: inside returnChildFrameWithUrlIncluding(), matching on ${strUrlPortionToMatch}`);
   await parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' });
   console.log(`INFO: after doing parentPageObj.mainFrame().waitForNavigation({ waitUntil: 'networkidle0' }), parentPageObj.mainFrame().childFrames().length is now: ${parentPageObj.mainFrame().childFrames().length}`);  
   for (const frame of parentPageObj.mainFrame().childFrames()){
-    console.log(`initial frame.url() of the current child frame is: ${frame.url()}`);
+    console.info(`INFO:initial frame.url() of the current child frame is: ${frame.url()}`);
     if (frame.url().includes(strUrlPortionToMatch)){
         console.log(`INFO: we found the iframe with url containing ${strUrlPortionToMatch} with name: ${frame.name()}`);
         return frame;
