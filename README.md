@@ -7,7 +7,9 @@ Utility using puppeteer to do automated data entry tasks via KR.
 ## Installation
 
 ```bash
-To be added...
+git clone https://github.com/fuzzy-slippers/kr-automation-puppeteer
+cd kr-automation-puppeteer/
+npm install
 ```
 
 ## Usage
