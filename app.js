@@ -6,7 +6,7 @@ const path = require(`path`).posix;
 // change to argument value with default value false
 const useHeadlessInvisibleBrowserObj = {headless: true}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
-//TODO: also make jpeg quality a property specified in the config json file
+const jpegQualityOutOfHundred = 15;
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -256,7 +256,7 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
     width: 800,
     height: 1000
   });
-  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: 30, fullpage: true });
+  pageTabForScreenshot.screenshot({ path: pathFileNameAndExtension, type: `jpeg`, quality: jpegQualityOutOfHundred, fullpage: true });
 }
 
   /**
