@@ -5,6 +5,7 @@ const path = require(`path`).posix;
 
 // change to argument value with default value false
 const useHeadlessInvisibleBrowserObj = {headless: false}; 
+const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -23,14 +24,15 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
 (async () => {
   if (confirmJsonConfigFileContainsAllNeededElements(argv)) {
     const pathOfScreenshotDirInsideConfigFolder = createDirectoryToHoldScreenshots(argv.jsonconfigfile);
-    const browser = await launchBrowserGiveUserTimeForSSOLogin(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin);
-
     const pathToSecurityRelatedDirectory = createDirIfDoesntExistAndGetPath(`./security_related`);
-    await saveCopyOfCookiesEnvironmentVar(browser, pathToSecurityRelatedDirectory);
+
+    await launchVisibleBrowserSSOLoginSaveCookies(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin, pathToSecurityRelatedDirectory);
+
+    const browserForAutomation = await launchBrowserWithSSOCookies(pathToSecurityRelatedDirectory, useHeadlessInvisibleBrowserObj);
 
     switch (argv.automationTask) {
       case `cancelPropDevProposals`:
-        await doAutomationCancelListPropDevProposals(browser, argv.leftPortionOfKRDirectLinkToModule, argv.recordNumsToUpdateInKRArr, argv.isKrUsingNewDashboardWithIframes, pathOfScreenshotDirInsideConfigFolder);
+        await doAutomationCancelListPropDevProposals(browserForAutomation, argv.leftPortionOfKRDirectLinkToModule, argv.recordNumsToUpdateInKRArr, argv.isKrUsingNewDashboardWithIframes, pathOfScreenshotDirInsideConfigFolder);
         break;
       default:
         throw new Error(`the json config must specify a automationTask as one of the fields so the program knows which automation to perform`);
@@ -79,7 +81,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
  /**
    * Record to disk the cookies from the presently open browser session to the path specified so that we can open additional browser sessions without needing to log in again.
    *
-   * Having a browser object passed in as that is what the calling function typicall has available, so just lookup the page object of the first tab which then allows us to get the cookies.
+   * Having a browser object passed in as that is what the calling function typically has available, so just lookup the page object of the first tab which then allows us to get the cookies.
    * Stores the cookies as a JSON file hard coded as "cookies.json" but with the path being passed in - planning to use a special security related folder that will be in the gitignore so that it wont be checked into version control, but the path will be handled at the level of the function that calls this, just specifying the folder once it's been created/determined
    * I had explored using temporary environment variables as an alternative but node does not appear to be able to write out environment variable data to the operating system, so that didn't seem like it could be viable, so went with saving to disk as all the examples I could find of puppeteer cookies were doing.
 
@@ -95,18 +97,30 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     fs.writeFileSync(`${dirToStoreCookies}/cookies.json`, cookieJson)
 
   }
-
-  async function retrieveLoginCookiesOrIfExpiredPromptUserForLogin(browser, dirToStoreCookies) {
-
-    //TODO: decide whether these cookies are expired - if so, likely will need to prompt for visiable browser login (if valid, can skip that step)
-    const pathToSecurityRelatedDirectory = createDirIfDoesntExistAndGetPath(`./security_related`);
-
-    const cookies = fs.readFileSync('cookies.json', 'utf8')
-    const deserializedCookies = JSON.parse(`${dirToStoreCookies}/cookies.json`);
-    await page.setCookie(...deserializedCookies)
-    console.info()
-
+ /**
+   * Launches a new chromium browser with all cookies loaded in (in case sessions are still active from the last browser launched by the program)
+   *
+   * The name of the cookies file is always cookies.json so that it can be overwritten each time, but the path to the folder to hold it is passed in (we have been using the security_related folder that is ignored in the gitignore file so local cookie info wont be checked into version control)
+   * If the cookie folder or file do not exist, just moves on with an error logged to the console - this can happen when the program is first run without cookies being recorded yet (will happen after the first time the user logs in)
+   * This function is to simply try to launch a browser with cookies preloaded, so that it can be used
+   *
+   * @param {string}    dirToStoreCookies The path of the folder to use to store the cookies.json file this function creates - the folder is passed in and handled outside of this function although the plan is for it to be a folder that is listed in the gitignore file so that the cookies wont be checked into version control - for example a "security_related" folder that is only used locally - decided to pass this in as the same path would be used in the function to retrieve the cookies as well, so not great to duplicate that code multiple places
+   * @param {Object}    puppeteerLaunchOptions The options object used for launching puppeteer, in this case the expected option would be {headless: false} or maybe {headless: true} - when this function is called to launch the initial browser uses for SSO logins, we will want it to always be visible/headless=false, but other times we may want to launch it with headless=true for the second browser doing the automation steps
+   * @return {Object}   browser    A puppeteer browser object, in this case one that has been launched with the cookies from the prior browser session already having been loaded in from disk
+   */
+  async function launchBrowserWithSSOCookies(dirToStoreCookies, puppeteerLaunchOptions) {
+    const browser = await puppeteer.launch(puppeteerLaunchOptions); 
+    const pageTab1 = (await browser.pages())[0];    
+    try {
+      const cookies = fs.readFileSync(`${dirToStoreCookies}/cookies.json`, 'utf8');
+      const deserializedCookies = JSON.parse(cookies);
+      await pageTab1.setCookie(...deserializedCookies);      
+    } catch (e) {
+      console.error(`issue opening ${dirToStoreCookies}/cookies.json (may be because the program has never been run before) - exception thrown was: ${e}`);
+    }
+    return browser;
   }
+
 
   /**
    * Creates a screenshot directory inside the config directory that was passed into the function. 
@@ -251,6 +265,40 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
    * the automated data entry. It follows the following steps:
    * 1. launches a new chromium browser using puppeteer
    * 2. loads the KR dashboard/home page in the initial tab
+   * @param {string}   KrDashboardUrl           The URL of the KR home page, used to trigger the approriate SSO login prompts
+   * @param {number}   [howLongToWaitForSSOLogin=18000] The amount of time in milliseconds to wait for the user to get logged into KR with the SSO screens before popping up the question of whether they are ready to start the automations
+   *
+   * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
+   */
+async function launchVisibleBrowserSSOLoginSaveCookies(KrDashboardUrl, howLongToWaitForSSOLogin=18000, dirToStoreCookies) {
+  //const browserForSSOLogin = await puppeteer.launch();    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
+  const browserForSSOLogin = await launchBrowserWithSSOCookies(dirToStoreCookies, {headless: false})
+  //setSSOCookiesFromPrevBrowser(pageTab1ForSSOLogin, dirToStoreCookies);
+  const pageTab1ForSSOLogin = (await browserForSSOLogin.pages())[0];
+  await Promise.all([
+    pageTab1ForSSOLogin.goto(KrDashboardUrl),
+    pageTab1ForSSOLogin.waitForNavigation({ waitUntil: 'networkidle0' }),
+  ]);
+  // if pageTab1ForSSOLogin url contains "idpselection" in the URL, assume we are NOT already logged in and close this initial visible browser just for SSO logins
+  if (await pageTab1ForSSOLogin.url().includes(`${wordToLookForInURLToIdentifySSORedirect}`)) {
+    console.info(`INFO: found we were redirected to the login page based on URL containing this keyword indicating we were redirected to an SSO screen: ${wordToLookForInURLToIdentifySSORedirect}`);
+    // if pointed to the SSO login pages, assume we need to log in manually and run the function to wait 18 seconds 
+    await giveUserTimeForSSOLogin(browserForSSOLogin, pageTab1ForSSOLogin, howLongToWaitForSSOLogin);
+    await saveCopyOfCookiesEnvironmentVar(browserForSSOLogin, dirToStoreCookies);
+    await browserForSSOLogin.close();
+  } 
+  else {
+    console.info(`INFO: found that we were not redirected to an SSO page (url did not contain this keyword ${wordToLookForInURLToIdentifySSORedirect}) so assuming we do not need to prompt the user to log in manually, we will just use the cookies from the last browser session`);
+    await browserForSSOLogin.close();
+  }
+}
+
+  /**
+   * Launches a browser with the KR home page, giving the user time to log in and pops up confirm to start automation
+   *
+   * This function does the initial steps to get a user logged in and ready to start
+   * the automated data entry. It follows the following steps:
+   * 
    * 3. given that the user will be presented with the SSO login which takes time, uses a timer to wait 10s of seconds until all the login MFA steps have been completed
    * 4. when the timer is up, pops up a new blank (second) tab with a js dialog box asking the user if they want to start the automation (OK/Cancel)
    * 5. if the user clicks ok, it closes the blank second tab, returning the browser object
@@ -260,27 +308,18 @@ async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUs
    *
    * @return {Object} Return the top level puppeteer browser object now with the first tab logged into KR
    */
-async function launchBrowserGiveUserTimeForSSOLogin(KrDashboardUrl, howLongToWaitForSSOLogin=18000) {
-  const browser = await puppeteer.launch(useHeadlessInvisibleBrowserObj);    //useful to see whats going on: slowMo: 250, in ,  args: ['--disable-features=site-per-process']
-  const pageTab1 = (await browser.pages())[0];
-  await pageTab1.goto(KrDashboardUrl);
-  await pageTab1.waitForTimeout(howLongToWaitForSSOLogin)
-  console.info(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
-  const pageTab2 = await browser.newPage();
-  const userConfirmedStartAutomation = await pageTab2.evaluate(_ => {
-    return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
-  });
-  if (userConfirmedStartAutomation) {
-    pageTab2.close();
-    return browser;
+  async function giveUserTimeForSSOLogin(browserForSSOLogin, pageTab1ForSSOLogin, howLongToWaitForSSOLogin=18000) {  
+    await pageTab1ForSSOLogin.waitForTimeout(howLongToWaitForSSOLogin)
+    console.info(`INFO: Waited ${(howLongToWaitForSSOLogin/1000)} seconds! Popping up second (blank) tab with ok dialog`);
+    const pageTab2ForSSOLogin = await browserForSSOLogin.newPage();
+    const userConfirmedStartAutomation = await pageTab2ForSSOLogin.evaluate(_ => {
+      return Promise.resolve(window.confirm(`Start automated data entry? (cancel=No)`));
+    });
+    if (!userConfirmedStartAutomation) {
+      throw new Error(`The user clicked the cancel button when asked if they wanted to start the automation - shutting down the program with error return code`);
+      process.exit(1); // terminate the program as the user has selected not to proceed with the automation
+    }
   }
-  else {
-    await browser.close();
-    throw new Error(`The user clicked the cancel button when asked if they wanted to start the automation - shutting down the program with error return code`);
-  }
-}
-
-
 
 /**
  * Opens a proposal and determines the iframe that contains the actual kr document (proposal) that data entry needs to happen on.
