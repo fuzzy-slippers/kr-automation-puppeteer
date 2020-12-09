@@ -6,7 +6,7 @@ const path = require(`path`).posix;
 // change to argument value with default value false
 const useHeadlessInvisibleBrowserObj = {headless: true}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
-const jpegQualityOutOfHundred = 15;
+const jpegQualityOutOfHundred = 10;
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -237,7 +237,9 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
   /**
    * Take a screenshot of the current KR record and action - the screenshot filename will be based on the link and prefex string like "cancelStep" passed in and placed in the folder passed in.
    * 
-   * Also changes the viewport size so that its verically very long so that the screenshot will capture everything (that was the only way I was getting a screenshot of the top error messages to be included)
+   * Also changes the viewport size so that its verically very long so that the screenshot will capture everything (that was the only way I was getting a screenshot of the top error messages to be included).
+   * The format of the screenshot filename includes both the URL of the direct link in KR to the record (so we can see if it is SBX, STG as well as the record number) - also added a string at the end that reflects what was happening when the screenshot was taken, as well as the current hr/min/month/day/year so that the screenshot is unique and doesnt get overwritten with subsequent runs or if you list the same record mulitiple times in order to do multiple reruns in case of a timeout on the initial runs 
+   * 
 
    * @param {Object}   pageTabForScreenshot    The page object pointing to the current browser tab that is being clicked on/automated (that the screenshot will be taken of)
    * @param {string}   prefexFilenameWith    Text to include on the left hand side of the screenshot filename, so that if we want to take multiple screenshots per automation we can differentiate the different ones all done on the same KR record
@@ -247,9 +249,10 @@ async function automateCancellingSinglePropDevProposal(browser, directLinkToProp
    */
 async function takeScreenshot(pageTabForScreenshot, prefexFilenameWith, linkToUseForFileName, pathOfScreenshotDir) {
   const linkUrlConvertedToFileNameFriendlyFormat = linkToUseForFileName.replace(/[^a-zA-Z0-9]/g,`_`);
+  const currentDatetime = new Date();
   const pathFileNameAndExtension = path.format({
     dir: pathOfScreenshotDir,
-    name: `${linkUrlConvertedToFileNameFriendlyFormat}__${prefexFilenameWith}`,
+    name: `${linkUrlConvertedToFileNameFriendlyFormat}__${prefexFilenameWith}_${currentDatetime.getHours()}_${currentDatetime.getMinutes()}_${currentDatetime.getDay()}_${currentDatetime.getMonth()}_${currentDatetime.getFullYear()}`,
     ext: `.jpg`
   });
   await pageTabForScreenshot.setViewport({
