@@ -7,6 +7,7 @@ const path = require(`path`).posix;
 const useHeadlessInvisibleBrowserObj = {headless: true}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
 const jpegQualityOutOfHundred = 10;
+const automationBrowserTabMaxTimeoutInSeconds = 60;
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -29,7 +30,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
 
     await launchVisibleBrowserSSOLoginSaveCookies(argv.urlToTriggerSSOLogin, argv.howLongToWaitForSSOLogin, pathToSecurityRelatedDirectory);
 
-    const browserForAutomation = await launchBrowserWithSSOCookies(pathToSecurityRelatedDirectory, useHeadlessInvisibleBrowserObj);
+    const browserForAutomation = await launchBrowserWithSSOCookies(pathToSecurityRelatedDirectory, useHeadlessInvisibleBrowserObj, automationBrowserTabMaxTimeoutInSeconds);
 
     switch (argv.automationTask) {
       case `cancelPropDevProposals`:
@@ -107,11 +108,13 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
    *
    * @param {string}    dirToStoreCookies The path of the folder to use to store the cookies.json file this function creates - the folder is passed in and handled outside of this function although the plan is for it to be a folder that is listed in the gitignore file so that the cookies wont be checked into version control - for example a "security_related" folder that is only used locally - decided to pass this in as the same path would be used in the function to retrieve the cookies as well, so not great to duplicate that code multiple places
    * @param {Object}    puppeteerLaunchOptions The options object used for launching puppeteer, in this case the expected option would be {headless: false} or maybe {headless: true} - when this function is called to launch the initial browser uses for SSO logins, we will want it to always be visible/headless=false, but other times we may want to launch it with headless=true for the second browser doing the automation steps
+   * @param {number}    automationBrowserTabMaxTimeoutInSeconds   Alls you to specify globally how long to wait for each browser click/navigation action to take before throwing a failure - helpful on overloaded system to increase this to allow everything to take a long time or reduce on a fast system with just a few browsers running to not have to wait as long when there is a KR error message for things to time out and for it to take the screenshot of the error (making the run time shorter)
    * @return {Object}   browser    A puppeteer browser object, in this case one that has been launched with the cookies from the prior browser session already having been loaded in from disk
    */
-  async function launchBrowserWithSSOCookies(dirToStoreCookies, puppeteerLaunchOptions) {
+  async function launchBrowserWithSSOCookies(dirToStoreCookies, puppeteerLaunchOptions, automationBrowserTabMaxTimeoutInSeconds) {
     const browser = await puppeteer.launch(puppeteerLaunchOptions); 
     const pageTab1 = (await browser.pages())[0];    
+    await pageTab1.setDefaultNavigationTimeout(automationBrowserTabMaxTimeoutInSeconds * 1000);
     try {
       const cookies = fs.readFileSync(`${dirToStoreCookies}/cookies.json`, 'utf8');
       const deserializedCookies = JSON.parse(cookies);
