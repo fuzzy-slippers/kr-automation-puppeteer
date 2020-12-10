@@ -7,7 +7,7 @@ const path = require(`path`).posix;
 const useHeadlessInvisibleBrowserObj = {headless: true}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
 const jpegQualityOutOfHundred = 10;
-const automationBrowserTabMaxTimeoutInSeconds = 60;
+const automationBrowserTabMaxTimeoutInSeconds = 90;
 
 // using yargs to handle command line options and auto-generate help menu of the options
 // specifically specifying a JSON file indicating what we are trying automated and the KR records to update
@@ -114,7 +114,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
   async function launchBrowserWithSSOCookies(dirToStoreCookies, puppeteerLaunchOptions, automationBrowserTabMaxTimeoutInSeconds) {
     const browser = await puppeteer.launch(puppeteerLaunchOptions); 
     const pageTab1 = (await browser.pages())[0];    
-    await pageTab1.setDefaultNavigationTimeout(automationBrowserTabMaxTimeoutInSeconds * 1000);
+    await pageTab1.setDefaultTimeout(automationBrowserTabMaxTimeoutInSeconds * 1000);
     try {
       const cookies = fs.readFileSync(`${dirToStoreCookies}/cookies.json`, 'utf8');
       const deserializedCookies = JSON.parse(cookies);
@@ -214,6 +214,9 @@ async function tryCancellingSinglePropDevProposalCaptureScreenshotOnException(br
 
   /**
    * Goes through the individual steps which taken together automate the cancelling of a single Prop Dev proposal (click sumary sbumit, cancel button, etc) and take a screenshot at the end to capture the final state.
+   *
+   * 
+   * Added logic to check the status of the proposal before attempting to do the automation and skip over the proposal (logging it) if is already cancelled to improve performance
    * 
    * @param {Object}   browser    The main Puppeteer browser object, will be needed to inspect the current list of iframes and potentially open new tabs
    * @param {string}   directLinkToProposal    The full direct link to a KR prop dev proposal, minus the proposal number portion, as would be generated from the link pop up at the top of KR prop dev module screen
@@ -225,16 +228,25 @@ async function tryCancellingSinglePropDevProposalCaptureScreenshotOnException(br
 async function automateCancellingSinglePropDevProposal(browser, directLinkToProposal, krUsingNewDashboardWithIframes, pathOfScreenshotDir) {
   const pdDocIFrame = await getIframeAfterLoadingPropDev(krUsingNewDashboardWithIframes, browser, directLinkToProposal); // await openProposalInNewTabReturnPdFrame(browser, directLinkToProposal);
 
-  await clickPropDevEditButton(pdDocIFrame);
-  await clickPropDevMenuSummarySubmit(pdDocIFrame);
-  await clickPropDevCancelProposalButton(pdDocIFrame);
-  await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  const proposalStatusPriorToChanges = await getProposalStatusFromKRPage(pdDocIFrame);  
 
-  const pageTab1 = (await browser.pages())[0];
-  await takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
-  console.log(`CSV: Finished cancelling Proposal: (${directLinkToProposal})`);
+  if (proposalStatusPriorToChanges !== `Cancelled`) {
+    await clickPropDevEditButton(pdDocIFrame);
+    await clickPropDevMenuSummarySubmit(pdDocIFrame);
+    await clickPropDevCancelProposalButton(pdDocIFrame);
+    await clickPropDevOkCancelButtonOnPopup(pdDocIFrame);
+  
+    const pageTab1 = (await browser.pages())[0];
+    await takeScreenshot(pageTab1, `afterCancelOk`, directLinkToProposal, pathOfScreenshotDir);
+    const proposalStatusAfterChanges = await getProposalStatusFromKRPage(pdDocIFrame);
+    console.log(`CSV: now showing status: ${proposalStatusAfterChanges}, ${directLinkToProposal} `);
+    return true; // cancelled the proposal
+  }
+  else {
+    console.error(`HISTORY: Proposal already shows Cancelled/skipping: ${directLinkToProposal}`);
+    return false; // did not cancel the proposal
+  }
 
-  return true; // cancelled the proposal
 }
 
   /**
@@ -418,30 +430,19 @@ async function clickPropDevOkCancelButtonOnPopup(propDevPageIframe) {
 }
 
 /**
- * NOT YET WORKING - Confirm that the Prop Dev record was really cancelled by checking the status showing on the page/screen at the end
- * 
- * Using the $eval seemed to work consistently for this to do the clicking (there might be some considerations given its inside a bootstrap model window) - also found that I needed to use the promise.all around it with a waitForNavigation() call or else when it tried to open the next proposal (next run of the doAutomatedDataEntryTasks function) it was showing a connection error navigating to the next proposal and it appears to be that it wasn't waiting until the page loaded after clicking the button, even though this one proposal would cancel
+ * Grabs the actual "Status:" text from the KR Prop Dev HTML page top document info section (ex: "In Progress, "Cancelled", etc), useful for checking the status or logging the progress.
+ *
+ * removing whitespace on the righthand side and lefthand side of the string before returning as I know HTML can often have random whitespace around words on the page, just in case
  * @param {Object} propDevPageIframe     A puppeteer page object that points to iframe that contains the KR Proposal Development document with the form elements/buttons being updated/automated
  */
-async function confirmPropDevReallyCancelled(propDevPageIframe) {
-  console.info(`INFO: attempting to confirmPropDevReallyCancelled`);
-
+async function getProposalStatusFromKRPage(propDevPageIframe) {
+  console.info(`INFO: called getProposalStatusFromKRPage()`);
   try {
-    console.info(`INFO: inside try of confirmPropDevReallyCancelled, about to try to get proposalNameTextOnPage`);
-    console.info(`INFO: about to do propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper')`)
-    await propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper');
-    console.info(`INFO: after propDevPageIframe.waitForSelector('#PropDev-DefaultView_headerWrapper'), about to try to get innerHTML `);
-    const html = await propDevPageIframe.$eval('#PropDev-DefaultView_headerWrapper', e => e.innerHTML); 
-    console.info(`INFO: #PropDev-DefaultView_headerWrapper innerHtml showing: ${html}`);
-    const proposalNameTextOnPage = await propDevPageIframe.$eval('#u1p8pc9q', e => e.innerText); 
-    console.info(`INFO: got proposalNameTextOnPage: ${proposalNameTextOnPage}`)
-    const proposalNumberTextOnPage = await propDevPageIframe.$eval('#PropDev-DefaultView_header > span.uif-headerText-span', e => e.innerText);
-    console.info(`INFO: got proposalNumberTextOnPage: ${proposalNumberTextOnPage}`)
-    const proposalStatusTextOnPage = await propDevPageIframe.$eval('#u1wvlcrs', e => e.innerText); 
-    console.log(`CSV: ${proposalNameTextOnPage}|${proposalNumberTextOnPage}|Status:|${proposalStatusTextOnPage}`);
+    console.info(`INFO: inside try of getProposalStatusFromKRPage, about to try to check the selector for the prop dev status text, #u1wvlcrs`);
+    const statusTextFoundOnPage = await propDevPageIframe.$eval('#u1wvlcrs', e => e.innerText);
+    return statusTextFoundOnPage.trim();
   } catch (e) {
-    console.error(`ERROR: inside error block for confirmPropDevReallyCancelled`);
-    console.error(`ERROR: inside confirmPropDevReallyCancelled checking for, exception is ${e.name}:${e.message} `);
+    console.error(`ERROR: inside getProposalStatusFromKRPage checking for, exception is ${e.name}:${e.message} `);
   }
 
 }
