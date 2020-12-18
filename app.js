@@ -4,7 +4,7 @@ const fs = require(`fs`);
 const path = require(`path`).posix;
 
 // change to argument value with default value false
-const useHeadlessInvisibleBrowserObj = {headless: true}; 
+const useHeadlessInvisibleBrowserObj = {headless: true, slowMo: 250}; 
 const wordToLookForInURLToIdentifySSORedirect = `idpselection`;
 const jpegQualityOutOfHundred = 10;
 const automationBrowserTabMaxTimeoutInSeconds = 90;
