@@ -5,9 +5,9 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app.js"
+    "start": "echo \"Error: unfortunately, need to use the node app.js command in order to specify a config file (see readme usage section) \" && exit 1"
   },
-  "author": "",
+  "author": "",(see
   "license": "ISC",
   "dependencies": {
     "-": "0.0.1",
